@@ -46,6 +46,7 @@ import com.tqmane.filmsim.ui.GenreAdapter
 import com.tqmane.filmsim.ui.LutAdapter
 import com.tqmane.filmsim.util.CubeLUT
 import com.tqmane.filmsim.util.CubeLUTParser
+import com.tqmane.filmsim.util.HighResLutProcessor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -666,7 +667,7 @@ class MainActivity : ComponentActivity() {
         val sourceBitmap = originalBitmap ?: return
         val lutPath = currentLutPath
         
-        Toast.makeText(this, "GPUで高速書き出し中...", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "書き出し中...", Toast.LENGTH_SHORT).show()
         
         // Parse LUT first (can be done off main thread)
         CoroutineScope(Dispatchers.IO).launch {
@@ -675,8 +676,9 @@ class MainActivity : ComponentActivity() {
                     CubeLUTParser.parse(this@MainActivity, lutPath)
                 } else null
                 
-                // Do GPU rendering on GL thread
+                // Try GPU rendering first
                 val outputBitmapHolder = arrayOfNulls<Bitmap>(1)
+                val gpuErrorHolder = arrayOf<Exception?>(null)
                 val latch = java.util.concurrent.CountDownLatch(1)
                 
                 glSurfaceView.queueEvent {
@@ -693,6 +695,7 @@ class MainActivity : ComponentActivity() {
                             4.0f
                         )
                     } catch (e: Exception) {
+                        gpuErrorHolder[0] = e
                         e.printStackTrace()
                     }
                     latch.countDown()
@@ -701,7 +704,24 @@ class MainActivity : ComponentActivity() {
                 // Wait for GPU rendering to complete
                 latch.await()
                 
-                val outputBitmap = outputBitmapHolder[0] ?: sourceBitmap
+                var outputBitmap = outputBitmapHolder[0]
+                
+                // Fallback to CPU if GPU failed or returned null
+                if (outputBitmap == null) {
+                    android.util.Log.d("MainActivity", "GPU export failed or unavailable, falling back to CPU processing...")
+                    
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@MainActivity, "CPUで処理中... (大きな画像は時間がかかります)", Toast.LENGTH_SHORT).show()
+                    }
+                    
+                    // CPU fallback
+                    outputBitmap = if (lut != null) {
+                        HighResLutProcessor.applyLut(sourceBitmap, lut, currentIntensity)
+                    } else {
+                        sourceBitmap
+                    }
+                    // Note: Film grain is not applied in CPU fallback (GPU-only feature)
+                }
                 
                 // Save with EXIF preservation
                 saveBitmapWithExif(outputBitmap)

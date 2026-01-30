@@ -114,6 +114,7 @@ class GpuExportRenderer(private val context: Context) {
     /**
      * Render the image with LUT at full resolution using GPU.
      * Must be called on GL thread.
+     * Returns null if the image is too large for GPU processing.
      */
     fun renderHighRes(
         inputBitmap: Bitmap,
@@ -122,11 +123,23 @@ class GpuExportRenderer(private val context: Context) {
         grainEnabled: Boolean,
         grainIntensity: Float,
         grainScale: Float
-    ): Bitmap {
+    ): Bitmap? {
         if (!isInitialized) initialize()
         
         val width = inputBitmap.width
         val height = inputBitmap.height
+        
+        // Check GPU texture size limit
+        val maxSize = IntArray(1)
+        GLES30.glGetIntegerv(GLES30.GL_MAX_TEXTURE_SIZE, maxSize, 0)
+        val maxTextureSize = maxSize[0]
+        
+        android.util.Log.d("GpuExportRenderer", "Image size: ${width}x${height}, GPU max texture size: $maxTextureSize")
+        
+        if (width > maxTextureSize || height > maxTextureSize) {
+            android.util.Log.w("GpuExportRenderer", "Image exceeds GPU texture limit (${width}x${height} > $maxTextureSize). Falling back to CPU.")
+            return null
+        }
         
         // Setup FBO texture
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, fboTextureId)
@@ -137,6 +150,14 @@ class GpuExportRenderer(private val context: Context) {
         // Attach texture to FBO
         GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, fboId)
         GLES30.glFramebufferTexture2D(GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0, GLES30.GL_TEXTURE_2D, fboTextureId, 0)
+        
+        // Check FBO completeness
+        val fboStatus = GLES30.glCheckFramebufferStatus(GLES30.GL_FRAMEBUFFER)
+        if (fboStatus != GLES30.GL_FRAMEBUFFER_COMPLETE) {
+            android.util.Log.e("GpuExportRenderer", "FBO incomplete: status=$fboStatus. Falling back to CPU.")
+            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
+            return null
+        }
         
         // Upload input texture
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, inputTextureId)
@@ -215,6 +236,37 @@ class GpuExportRenderer(private val context: Context) {
         GLES30.glReadPixels(0, 0, width, height, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, buffer)
         buffer.rewind()
         
+        // Check if output is all black (GPU rendering failed silently)
+        // Sample multiple points across the image
+        val samplePoints = listOf(
+            0,                                      // top-left
+            (width / 2) * 4,                        // top-center
+            (height / 2) * width * 4,               // middle-left
+            (height / 2 * width + width / 2) * 4,   // center
+            ((height - 1) * width + width / 2) * 4  // bottom-center
+        )
+        
+        var allBlack = true
+        for (pos in samplePoints) {
+            if (pos + 3 < buffer.capacity()) {
+                val r = buffer.get(pos).toInt() and 0xFF
+                val g = buffer.get(pos + 1).toInt() and 0xFF
+                val b = buffer.get(pos + 2).toInt() and 0xFF
+                if (r > 0 || g > 0 || b > 0) {
+                    allBlack = false
+                    break
+                }
+            }
+        }
+        
+        buffer.rewind()
+        
+        if (allBlack) {
+            android.util.Log.e("GpuExportRenderer", "GPU output is all black - rendering failed. Falling back to CPU.")
+            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
+            return null
+        }
+        
         // Create output bitmap
         val outputBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         outputBitmap.copyPixelsFromBuffer(buffer)
@@ -222,7 +274,7 @@ class GpuExportRenderer(private val context: Context) {
         // Unbind FBO
         GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
         
-        // No need to flip if the texture coordinates and readout are aligned correctly
+        android.util.Log.d("GpuExportRenderer", "GPU export successful: ${width}x${height}")
         return outputBitmap
     }
     
