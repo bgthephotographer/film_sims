@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_selected="true">
+        <layer-list>
+            <!-- Outer glow -->
+            <item
+                android:left="-6dp"
+                android:top="-6dp"
+                android:right="-6dp"
+                android:bottom="-6dp">
+                <shape android:shape="rectangle">
+                    <solid android:color="@color/accent_glow_strong" />
+                    <corners android:radius="22dp" />
+                </shape>
+            </item>
+            <!-- Main card background -->
+            <item>
+                <shape android:shape="rectangle">
+                    <gradient
+                        android:type="linear"
+                        android:angle="135"
+                        android:startColor="#FF1E1E22"
+                        android:endColor="#FF141418" />
+                    <corners android:radius="16dp" />
+                </shape>
+            </item>
+            <!-- Gradient border effect -->
+            <item>
+                <shape android:shape="rectangle">
+                    <stroke
+                        android:width="2dp"
+                        android:color="@color/accent_start" />
+                    <corners android:radius="16dp" />
+                </shape>
+            </item>
+            <!-- Inner shine -->
+            <item>
+                <shape android:shape="rectangle">
+                    <gradient
+                        android:type="linear"
+                        android:angle="90"
+                        android:startColor="#00FFFFFF"
+                        android:endColor="#12FFFFFF" />
+                    <corners android:radius="16dp" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+    <item>
+        <layer-list>
+            <!-- Glass background -->
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="#25FFFFFF" />
+                    <corners android:radius="16dp" />
+                </shape>
+            </item>
+            <!-- Inner gradient -->
+            <item>
+                <shape android:shape="rectangle">
+                    <gradient
+                        android:type="linear"
+                        android:angle="135"
+                        android:startColor="#08FFFFFF"
+                        android:endColor="#00000000" />
+                    <corners android:radius="16dp" />
+                </shape>
+            </item>
+            <!-- Subtle border -->
+            <item>
+                <shape android:shape="rectangle">
+                    <stroke
+                        android:width="1dp"
+                        android:color="#18FFFFFF" />
+                    <corners android:radius="16dp" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+</selector>

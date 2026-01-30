@@ -1,0 +1,285 @@
+package com.tqmane.filmsim.gl
+
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.opengl.GLES30
+import android.opengl.GLSurfaceView
+import android.opengl.GLUtils
+import com.tqmane.filmsim.R
+import com.tqmane.filmsim.util.CubeLUT
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.FloatBuffer
+import javax.microedition.khronos.egl.EGLConfig
+import javax.microedition.khronos.opengles.GL10
+
+class FilmSimRenderer(private val context: Context) : GLSurfaceView.Renderer {
+
+    private var programId: Int = 0
+    private var inputTextureId: Int = 0
+    private var lutTextureId: Int = 0
+    private var grainTextureId: Int = 0
+    
+    private var vertexBuffer: FloatBuffer
+    private var texCoordBuffer: FloatBuffer
+
+    private var pendingBitmap: Bitmap? = null
+    private var pendingLut: CubeLUT? = null
+    private var pendingGrainBitmap: Bitmap? = null
+    
+    private var viewportWidth = 0
+    private var viewportHeight = 0
+    
+    private var imageWidth = 1
+    private var imageHeight = 1
+    
+    // LUT intensity (0.0 = original, 1.0 = full effect)
+    private var intensity: Float = 1.0f
+    
+    // Film grain settings
+    private var grainIntensity: Float = 0.0f
+    private var grainScale: Float = 4.0f
+    private var grainEnabled: Boolean = false
+    
+    // Transform parameters
+    private var userZoom: Float = 1.0f
+    private var userOffsetX: Float = 0.0f
+    private var userOffsetY: Float = 0.0f
+    
+    private var hasImage: Boolean = false
+
+    init {
+        // Full screen quad
+        val vertices = floatArrayOf(
+            -1f, -1f,
+             1f, -1f,
+            -1f,  1f,
+             1f,  1f
+        )
+        val texCoords = floatArrayOf(
+            0f, 1f,
+            1f, 1f,
+            0f, 0f,
+            1f, 0f
+        )
+        
+        vertexBuffer = ByteBuffer.allocateDirect(vertices.size * 4)
+            .order(ByteOrder.nativeOrder()).asFloatBuffer().put(vertices)
+        vertexBuffer.position(0)
+        
+        texCoordBuffer = ByteBuffer.allocateDirect(texCoords.size * 4)
+            .order(ByteOrder.nativeOrder()).asFloatBuffer().put(texCoords)
+        texCoordBuffer.position(0)
+    }
+
+    fun setImage(bitmap: Bitmap) {
+        pendingBitmap = bitmap
+        hasImage = true
+    }
+
+    fun setLut(lut: CubeLUT) {
+        pendingLut = lut
+    }
+    
+    fun setIntensity(value: Float) {
+        intensity = value.coerceIn(0f, 1f)
+    }
+    
+    fun getIntensity(): Float = intensity
+    
+    fun hasLoadedImage(): Boolean = hasImage
+    
+    // Film grain methods
+    fun setGrainEnabled(enabled: Boolean) {
+        grainEnabled = enabled
+    }
+    
+    fun setGrainIntensity(value: Float) {
+        grainIntensity = value.coerceIn(0f, 1f)
+    }
+    
+    fun setGrainScale(value: Float) {
+        grainScale = value.coerceIn(1f, 10f)
+    }
+    
+    fun updateTransform(zoom: Float, offsetX: Float, offsetY: Float) {
+        userZoom = zoom
+        userOffsetX = offsetX
+        userOffsetY = offsetY
+    }
+    
+    fun loadGrainTexture(bitmap: Bitmap) {
+        pendingGrainBitmap = bitmap
+    }
+
+    override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
+        val vertexSource = readRawTextFile(R.raw.vertex_shader)
+        val fragmentSource = readRawTextFile(R.raw.fragment_shader)
+        
+        val vertexShader = loadShader(GLES30.GL_VERTEX_SHADER, vertexSource)
+        val fragmentShader = loadShader(GLES30.GL_FRAGMENT_SHADER, fragmentSource)
+        
+        programId = GLES30.glCreateProgram()
+        GLES30.glAttachShader(programId, vertexShader)
+        GLES30.glAttachShader(programId, fragmentShader)
+        GLES30.glLinkProgram(programId)
+        
+        // Generate textures (3 now: input, LUT, grain)
+        val textures = IntArray(3)
+        GLES30.glGenTextures(3, textures, 0)
+        inputTextureId = textures[0]
+        lutTextureId = textures[1]
+        grainTextureId = textures[2]
+        
+        // Try to load default grain texture from assets
+        loadDefaultGrainTexture()
+    }
+    
+    private fun loadDefaultGrainTexture() {
+        try {
+            val inputStream = context.assets.open("textures/film_grain.png")
+            val bitmap = BitmapFactory.decodeStream(inputStream)
+            inputStream.close()
+            if (bitmap != null) {
+                pendingGrainBitmap = bitmap
+            }
+        } catch (e: Exception) {
+            // No default grain texture, that's ok
+        }
+    }
+
+    override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
+        viewportWidth = width
+        viewportHeight = height
+        GLES30.glViewport(0, 0, width, height)
+    }
+
+    override fun onDrawFrame(gl: GL10?) {
+        GLES30.glClearColor(0.05f, 0.05f, 0.05f, 1.0f)
+        GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
+        
+        // Update input texture if needed
+        pendingBitmap?.let { bmp ->
+            imageWidth = bmp.width
+            imageHeight = bmp.height
+            
+            GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, inputTextureId)
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR)
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR)
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE)
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE)
+            GLUtils.texImage2D(GLES30.GL_TEXTURE_2D, 0, bmp, 0)
+            pendingBitmap = null
+        }
+        
+        // Update LUT texture if needed
+        pendingLut?.let { lut ->
+            GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, lutTextureId)
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR)
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR)
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE)
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE)
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_R, GLES30.GL_CLAMP_TO_EDGE)
+            
+            GLES30.glTexImage3D(GLES30.GL_TEXTURE_3D, 0, GLES30.GL_RGB, 
+                lut.size, lut.size, lut.size, 0, 
+                GLES30.GL_RGB, GLES30.GL_FLOAT, lut.data)
+                
+            pendingLut = null
+        }
+        
+        // Update grain texture if needed
+        pendingGrainBitmap?.let { bmp ->
+            GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, grainTextureId)
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR)
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR)
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_REPEAT)
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_REPEAT)
+            GLUtils.texImage2D(GLES30.GL_TEXTURE_2D, 0, bmp, 0)
+            pendingGrainBitmap = null
+        }
+
+        if (inputTextureId != 0 && hasImage) {
+            GLES30.glUseProgram(programId)
+            
+            val positionHandle = GLES30.glGetAttribLocation(programId, "aPosition")
+            GLES30.glEnableVertexAttribArray(positionHandle)
+            GLES30.glVertexAttribPointer(positionHandle, 2, GLES30.GL_FLOAT, false, 0, vertexBuffer)
+            
+            val texCoordHandle = GLES30.glGetAttribLocation(programId, "aTexCoord")
+            GLES30.glEnableVertexAttribArray(texCoordHandle)
+            GLES30.glVertexAttribPointer(texCoordHandle, 2, GLES30.GL_FLOAT, false, 0, texCoordBuffer)
+            
+            // Calculate Aspect Ratio Scale
+            val imgRatio = imageWidth.toFloat() / imageHeight.toFloat()
+            val viewRatio = viewportWidth.toFloat() / viewportHeight.toFloat()
+            
+            var scaleX = 1f
+            var scaleY = 1f
+            
+            if (imgRatio > viewRatio) {
+                scaleY = viewRatio / imgRatio
+            } else {
+                scaleX = imgRatio / viewRatio
+            }
+            
+            val scaleHandle = GLES30.glGetUniformLocation(programId, "uScale")
+            GLES30.glUniform2f(scaleHandle, scaleX, scaleY)
+            
+            // Set user transform (zoom & pan)
+            val zoomHandle = GLES30.glGetUniformLocation(programId, "uZoom")
+            GLES30.glUniform1f(zoomHandle, userZoom)
+            
+            val offsetHandle = GLES30.glGetUniformLocation(programId, "uOffset")
+            GLES30.glUniform2f(offsetHandle, userOffsetX, userOffsetY)
+            
+            // Set intensity uniform
+            val intensityHandle = GLES30.glGetUniformLocation(programId, "uIntensity")
+            GLES30.glUniform1f(intensityHandle, intensity)
+            
+            // Set grain uniforms
+            val grainIntensityHandle = GLES30.glGetUniformLocation(programId, "uGrainIntensity")
+            GLES30.glUniform1f(grainIntensityHandle, if (grainEnabled) grainIntensity else 0f)
+            
+            val grainScaleHandle = GLES30.glGetUniformLocation(programId, "uGrainScale")
+            GLES30.glUniform1f(grainScaleHandle, grainScale)
+            
+            val timeHandle = GLES30.glGetUniformLocation(programId, "uTime")
+            GLES30.glUniform1f(timeHandle, 0f) // Static grain for now
+
+            // Bind textures
+            GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
+            GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, inputTextureId)
+            GLES30.glUniform1i(GLES30.glGetUniformLocation(programId, "uInputTexture"), 0)
+            
+            GLES30.glActiveTexture(GLES30.GL_TEXTURE1)
+            GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, lutTextureId)
+            GLES30.glUniform1i(GLES30.glGetUniformLocation(programId, "uLutTexture"), 1)
+            
+            GLES30.glActiveTexture(GLES30.GL_TEXTURE2)
+            GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, grainTextureId)
+            GLES30.glUniform1i(GLES30.glGetUniformLocation(programId, "uGrainTexture"), 2)
+            
+            GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
+            
+            GLES30.glDisableVertexAttribArray(positionHandle)
+            GLES30.glDisableVertexAttribArray(texCoordHandle)
+        }
+    }
+
+    private fun loadShader(type: Int, shaderCode: String): Int {
+        val shader = GLES30.glCreateShader(type)
+        GLES30.glShaderSource(shader, shaderCode)
+        GLES30.glCompileShader(shader)
+        return shader
+    }
+
+    private fun readRawTextFile(resId: Int): String {
+        val inputStream = context.resources.openRawResource(resId)
+        val reader = BufferedReader(InputStreamReader(inputStream))
+        return reader.use { it.readText() }
+    }
+}

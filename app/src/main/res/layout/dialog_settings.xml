@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@color/surface_medium">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="設定"
+        android:textColor="@color/text_primary"
+        android:textSize="22sp"
+        android:fontFamily="sans-serif-medium"
+        android:layout_marginBottom="24dp" />
+
+    <!-- Save Location Setting -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="保存先フォルダ"
+        android:textColor="@color/text_secondary"
+        android:textSize="14sp"
+        android:layout_marginBottom="8dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@color/surface_elevated"
+        android:padding="16dp"
+        android:layout_marginBottom="16dp">
+
+        <TextView
+            android:id="@+id/tvSavePath"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Pictures/FilmSims"
+            android:textColor="@color/text_primary"
+            android:textSize="15sp"
+            android:singleLine="true"
+            android:ellipsize="start" />
+
+        <Button
+            android:id="@+id/btnChangePath"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:text="変更"
+            android:textColor="@color/black"
+            android:textSize="13sp"
+            android:background="@drawable/bg_button_primary"
+            android:paddingHorizontal="16dp"
+            android:stateListAnimator="@null" />
+
+    </LinearLayout>
+
+    <!-- Image Quality Setting -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="保存品質"
+        android:textColor="@color/text_secondary"
+        android:textSize="14sp"
+        android:layout_marginBottom="8dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@color/surface_elevated"
+        android:padding="16dp"
+        android:layout_marginBottom="24dp">
+
+        <SeekBar
+            android:id="@+id/qualitySlider"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:max="100"
+            android:progress="100"
+            android:progressDrawable="@drawable/slider_track"
+            android:thumb="@drawable/slider_thumb"
+            android:splitTrack="false" />
+
+        <TextView
+            android:id="@+id/tvQualityValue"
+            android:layout_width="52dp"
+            android:layout_height="wrap_content"
+            android:text="100%"
+            android:textColor="@color/accent_primary"
+            android:textSize="15sp"
+            android:fontFamily="sans-serif-bold"
+            android:gravity="end"
+            android:layout_marginStart="16dp" />
+
+    </LinearLayout>
+
+    <!-- Close Button -->
+    <Button
+        android:id="@+id/btnCloseSettings"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:text="閉じる"
+        android:textColor="@color/text_primary"
+        android:textSize="15sp"
+        android:background="@drawable/bg_button_secondary"
+        android:stateListAnimator="@null" />
+
+</LinearLayout>

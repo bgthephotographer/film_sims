@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Main glass background -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/glass_bg" />
+            <corners android:radius="32dp" />
+        </shape>
+    </item>
+    <!-- Inner subtle gradient for depth -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="linear"
+                android:angle="135"
+                android:startColor="#08FFFFFF"
+                android:endColor="#00000000" />
+            <corners android:radius="32dp" />
+        </shape>
+    </item>
+    <!-- Top edge highlight (glass reflection) -->
+    <item
+        android:top="0dp"
+        android:left="24dp"
+        android:right="24dp"
+        android:bottom="0dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="linear"
+                android:angle="90"
+                android:startColor="#00FFFFFF"
+                android:centerColor="#00FFFFFF"
+                android:endColor="#18FFFFFF" />
+            <corners android:radius="32dp" />
+            <size android:height="1dp" />
+        </shape>
+    </item>
+    <!-- Border stroke -->
+    <item>
+        <shape android:shape="rectangle">
+            <stroke
+                android:width="1dp"
+                android:color="@color/glass_border" />
+            <corners android:radius="32dp" />
+        </shape>
+    </item>
+</layer-list>
