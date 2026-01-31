@@ -53,85 +53,91 @@ def parse_ms_lut_header(data: bytes) -> dict:
     if not data.startswith(b'.MS-LUT '):
         return None
     
-    # Header structure (observed):
-    # Offset 0x00: Magic ".MS-LUT " (8 bytes)
-    # Offset 0x08: Version (4 bytes, little-endian)
-    # Offset 0x0C: LUT size hint (4 bytes, little-endian)  
-    # Offset 0x18: Channel count (4 bytes)
-    # Offset 0x20: Offset to LUT params (8 bytes)
-    # Offset 0x28: Offset to LUT data (8 bytes)
-    
+    # Header analysis
     version = struct.unpack('<I', data[8:12])[0]
-    lut_info = struct.unpack('<I', data[12:16])[0]
     
-    # Extract data offset from header
-    data_offset = 0xB0  # Default for v2
-    if len(data) >= 0x30:
-        param_offset = struct.unpack('<Q', data[0x20:0x28])[0]
-        data_offset_field = struct.unpack('<Q', data[0x28:0x30])[0]
-        if data_offset_field > 0 and data_offset_field < len(data):
-            data_offset = data_offset_field
+    # Try to read data offset from header (if version supports it)
+    # Valid header sizes seen: 0xB0 (176), 0x74 (116)
     
+    data_offset = 0
+    lut_size = 0
+    channels = 3
+    
+    # Check explicitly for common headers
+    if len(data) > 0x30:
+        # Some versions have offset at 0x28 or 0x2C
+        possible_offsets = []
+        try:
+             # Try 64-bit offsets at common locations
+            off1 = struct.unpack('<Q', data[0x20:0x28])[0]
+            if 0 < off1 < len(data): possible_offsets.append(off1)
+            
+            off2 = struct.unpack('<Q', data[0x28:0x30])[0]
+            if 0 < off2 < len(data): possible_offsets.append(off2)
+        except:
+            pass
+            
+        if possible_offsets:
+            data_offset = possible_offsets[0] # Pick first valid-looking one
+            
+    # If no offset found or looks wrong, calculate from file size
     file_size = len(data)
     
-    # Calculate LUT size from remaining data
-    remaining = file_size - data_offset
+    # Known exact profiles
+    if file_size == 14855: # 17^3 * 3 + 116
+        return {'lut_size': 17, 'channels': 3, 'data_offset': 116, 'version': version, 'bgr': True}
+    elif file_size == 98480: # 32^3 * 3 + 176
+        return {'lut_size': 32, 'channels': 3, 'data_offset': 176, 'version': version, 'bgr': True}
+    elif file_size == 111264: # 21^3 * 4 + ?
+        # 111264 - (21^3 * 4) = 111264 - 37044 = 74220 (Too big header?)
+        # 111264 - (21^3 * 3) = 111264 - 27783 = 83481
+        pass
     
-    # Try different LUT sizes to find the best match
-    for size in [32, 33, 17, 16, 21, 25, 20]:
-        expected_rgb = size ** 3 * 3
-        expected_rgba = size ** 3 * 4
-        if remaining == expected_rgb or remaining == expected_rgba:
-            channels = 3 if remaining == expected_rgb else 4
-            return {
-                'version': version,
-                'lut_size': size,
-                'file_size': file_size,
-                'data_offset': data_offset,
-                'channels': channels,
-            }
-    
-    # Special case: check for non-standard sizes with tolerance
-    for size in [20, 17, 21, 25]:
+    # Brute force check
+    found = False
+    for size in [17, 32, 33, 21, 16, 25, 20, 64]:
         for ch in [3, 4]:
-            expected = size ** 3 * ch
-            if abs(remaining - expected) <= 4:
-                return {
-                    'version': version,
-                    'lut_size': size,
-                    'file_size': file_size,
-                    'data_offset': data_offset,
-                    'channels': ch,
-                }
+            payload = size ** 3 * ch
+            header_size = file_size - payload
+            
+            # Header sizes are usually small (under 4KB) and positive
+            if 0 <= header_size < 4096:
+                lut_size = size
+                channels = ch
+                data_offset = header_size
+                found = True
+                break
+        if found: break
     
-    # Fallback: guess from file size
-    if file_size <= 14900:
-        lut_size = 17
-    elif file_size <= 17000:
-        lut_size = 16
-    elif file_size <= 28000:
-        lut_size = 21
-    elif file_size <= 100000:
-        lut_size = 32  # 98480 bytes = 0xB0 header + 32^3*3
-    elif file_size <= 135000:
-        lut_size = 32
-    else:
-        lut_size = 33
-    
+    if not found:
+        # Fallback guesses based on size
+        if file_size <= 16000: lut_size = 17
+        elif file_size <= 30000: lut_size = 21
+        elif file_size <= 100000: lut_size = 32
+        else: lut_size = 33
+        
+        # Assume standard 3 size
+        channels = 3
+        data_offset = file_size - (lut_size**3 * channels)
+        if data_offset < 0: 
+            data_offset = 0 # Raw file?
+
     return {
         'version': version,
         'lut_size': lut_size,
         'file_size': file_size,
         'data_offset': data_offset,
-        'channels': 3,
+        'channels': channels,
+        'bgr': True # Most mobile LUTs are BGRA/BGR
     }
 
 
 def extract_lut_data(data: bytes, header: dict) -> list:
     """Extract RGB values from binary LUT data using header info."""
     lut_size = header.get('lut_size', 17)
-    data_offset = header.get('data_offset', 0xB0)
+    data_offset = header.get('data_offset', 0)
     channels = header.get('channels', 3)
+    is_bgr = header.get('bgr', False)
     
     # Start from the data offset
     lut_data = data[data_offset:]
@@ -144,14 +150,24 @@ def extract_lut_data(data: bytes, header: dict) -> list:
         if offset + 3 > len(lut_data):
             break
         
-        r = lut_data[offset] / 255.0
-        g = lut_data[offset + 1] / 255.0
-        b = lut_data[offset + 2] / 255.0
+        # Read raw bytes
+        v1 = lut_data[offset]
+        v2 = lut_data[offset + 1]
+        v3 = lut_data[offset + 2]
         
-        entries.append((r, g, b))
+        # Convert to float
+        c1 = v1 / 255.0
+        c2 = v2 / 255.0
+        c3 = v3 / 255.0
+        
+        if is_bgr:
+            # BGR -> RGB
+            entries.append((c3, c2, c1))
+        else:
+            # RGB -> RGB
+            entries.append((c1, c2, c3))
     
     return entries
-
 
 def extract_float_lut(data: bytes, lut_size: int) -> list:
     """Extract LUT data stored as IEEE 754 floats."""
@@ -261,21 +277,48 @@ def convert_bin_to_cube(bin_path: Path, output_dir: Path) -> tuple:
         header = parse_ms_lut_header(data)
         
         if header is None:
-            # Not .MS-LUT format - might be raw LUT data
-            # Try to infer size from file size
+            # Raw LUT data detected
             file_size = len(data)
-            if file_size == 131072:  # 32^3 * 4 (RGBA)
-                lut_size = 32
-            elif file_size == 98304:  # 32^3 * 3 (RGB)
-                lut_size = 32
-            elif file_size == 107991:  # ~33^3 * 3
-                lut_size = 33
-            elif file_size == 16384:  # 16^3 * 4 (RGBA)
-                lut_size = 16
-            else:
-                lut_size = 17  # Default guess
             
-            entries = extract_byte_lut(data, lut_size, 3 if file_size % 4 != 0 else 4)
+            # Default assumptions for raw
+            is_bgr = True 
+            
+            if file_size == 16384: # 16^3 * 4
+                lut_size = 16
+                channels = 4
+            elif file_size == 131072: # 32^3 * 4
+                lut_size = 32
+                channels = 4
+            elif file_size == 98304: # 32^3 * 3
+                lut_size = 32
+                channels = 3
+            elif file_size == 12288: # 16^3 * 3
+                lut_size = 16
+                channels = 3
+            else:
+                # Guess based on cube root
+                # Try 4 channels
+                size_c4 = int((file_size / 4) ** (1/3) + 0.5)
+                if size_c4**3 * 4 == file_size:
+                    lut_size = size_c4
+                    channels = 4
+                else:
+                    # Try 3 channels
+                    size_c3 = int((file_size / 3) ** (1/3) + 0.5)
+                    lut_size = size_c3
+                    channels = 3
+            
+            header = {
+                'lut_size': lut_size,
+                'data_offset': 0,
+                'channels': channels,
+                'bgr': is_bgr
+            }
+            
+        if header is None:
+            # ... (rest of raw handling)
+            # ...
+            pass
         else:
             lut_size = header['lut_size']
             entries = extract_lut_data(data, header)
@@ -292,10 +335,12 @@ def convert_bin_to_cube(bin_path: Path, output_dir: Path) -> tuple:
             # Pad with identity values if needed
             while len(entries) < expected:
                 idx = len(entries)
-                b = idx // (lut_size * lut_size)
-                g = (idx // lut_size) % lut_size
-                r = idx % lut_size
-                entries.append((r / (lut_size-1), g / (lut_size-1), b / (lut_size-1)))
+                # Identity BGR: B=B, G=G, R=R
+                # But here we just want linear 0..1 in RGB
+                b = (idx // (lut_size * lut_size)) / (lut_size - 1)
+                g = ((idx // lut_size) % lut_size) / (lut_size - 1)
+                r = (idx % lut_size) / (lut_size - 1)
+                entries.append((r, g, b))
         
         # Determine genre
         genre = categorize_lut(bin_path.stem)
