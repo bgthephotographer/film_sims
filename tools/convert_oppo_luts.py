@@ -84,13 +84,17 @@ def parse_ms_lut_header(data: bytes, filename: str = None) -> dict:
     file_size = len(data)
     
     # Determine channel order from filename
-    # Default to RGB (Most OPPO/Fujifilm bin files seem to be RGB)
-    # Exception: if filename explicitly says "rgba" (Ricoh uses rgba and works with BGR swap)
-    is_bgr = False
+    # - Files with .rgb. or .cube. in name: RGB (pre-converted)
+    # - Native Oppo files without .rgb.: BGR
+    # - .rgba. files: BGR (needs swap to RGB)
+    is_bgr = True  # Default to BGR for native Oppo files
     if filename:
         lower_name = filename.lower()
-        if '.rgba.' in lower_name:
-            is_bgr = True
+        has_rgb_marker = '.rgb.' in lower_name or '.cube.' in lower_name
+        has_rgba_marker = '.rgba.' in lower_name
+        
+        # Pre-converted files are RGB, native Oppo files and .rgba are BGR
+        is_bgr = not has_rgb_marker or has_rgba_marker
             
     # Known exact profiles
     if file_size == 14855: # 17^3 * 3 + 116
