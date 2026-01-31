@@ -47,7 +47,7 @@ def categorize_lut(filename: str) -> str:
     return "Uncategorized"
 
 
-def parse_ms_lut_header(data: bytes) -> dict:
+def parse_ms_lut_header(data: bytes, filename: str = None) -> dict:
     """Parse .MS-LUT header and return metadata."""
     # Check magic number
     if not data.startswith(b'.MS-LUT '):
@@ -83,15 +83,20 @@ def parse_ms_lut_header(data: bytes) -> dict:
     # If no offset found or looks wrong, calculate from file size
     file_size = len(data)
     
+    # Determine channel order from filename
+    # Default to RGB (Most OPPO/Fujifilm bin files seem to be RGB)
+    # Exception: if filename explicitly says "rgba" (Ricoh uses rgba and works with BGR swap)
+    is_bgr = False
+    if filename:
+        lower_name = filename.lower()
+        if '.rgba.' in lower_name:
+            is_bgr = True
+            
     # Known exact profiles
     if file_size == 14855: # 17^3 * 3 + 116
-        return {'lut_size': 17, 'channels': 3, 'data_offset': 116, 'version': version, 'bgr': True}
+        return {'lut_size': 17, 'channels': 3, 'data_offset': 116, 'version': version, 'bgr': is_bgr}
     elif file_size == 98480: # 32^3 * 3 + 176
-        return {'lut_size': 32, 'channels': 3, 'data_offset': 176, 'version': version, 'bgr': True}
-    elif file_size == 111264: # 21^3 * 4 + ?
-        # 111264 - (21^3 * 4) = 111264 - 37044 = 74220 (Too big header?)
-        # 111264 - (21^3 * 3) = 111264 - 27783 = 83481
-        pass
+        return {'lut_size': 32, 'channels': 3, 'data_offset': 176, 'version': version, 'bgr': is_bgr}
     
     # Brute force check
     found = False
@@ -128,7 +133,7 @@ def parse_ms_lut_header(data: bytes) -> dict:
         'file_size': file_size,
         'data_offset': data_offset,
         'channels': channels,
-        'bgr': True # Most mobile LUTs are BGRA/BGR
+        'bgr': is_bgr # Most mobile LUTs are BGRA/BGR
     }
 
 
@@ -274,7 +279,7 @@ def convert_bin_to_cube(bin_path: Path, output_dir: Path) -> tuple:
                 pass
         
         # Parse .MS-LUT header
-        header = parse_ms_lut_header(data)
+        header = parse_ms_lut_header(data, bin_path.name)
         
         if header is None:
             # Raw LUT data detected
@@ -308,6 +313,12 @@ def convert_bin_to_cube(bin_path: Path, output_dir: Path) -> tuple:
                     lut_size = size_c3
                     channels = 3
             
+                channels = 3
+            
+            # Determine BGR from filename for raw files
+            if '.rgb.' in bin_path.name.lower() and '.rgba.' not in bin_path.name.lower():
+                is_bgr = False
+                
             header = {
                 'lut_size': lut_size,
                 'data_offset': 0,
