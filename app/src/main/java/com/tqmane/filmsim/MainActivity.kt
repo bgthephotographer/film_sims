@@ -839,6 +839,7 @@ class MainActivity : ComponentActivity() {
                 latch.await()
                 
                 var outputBitmap = outputBitmapHolder[0]
+                var shouldRecycleOutput = true
                 
                 // Fallback to CPU if GPU failed or returned null
                 if (outputBitmap == null) {
@@ -852,6 +853,8 @@ class MainActivity : ComponentActivity() {
                     outputBitmap = if (lut != null) {
                         HighResLutProcessor.applyLut(sourceBitmap, lut, currentIntensity)
                     } else {
+                        // No LUT, use source directly (don't recycle source!)
+                        shouldRecycleOutput = false
                         sourceBitmap
                     }
                     // Note: Film grain is not applied in CPU fallback (GPU-only feature)
@@ -859,6 +862,11 @@ class MainActivity : ComponentActivity() {
                 
                 // Save with EXIF preservation
                 saveBitmapWithExif(outputBitmap)
+                
+                // Recycle output bitmap if it's not the source
+                if (shouldRecycleOutput && outputBitmap != sourceBitmap) {
+                    outputBitmap.recycle()
+                }
                 
             } catch (e: Exception) {
                 e.printStackTrace()

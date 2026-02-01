@@ -16,6 +16,7 @@ import java.nio.FloatBuffer
 /**
  * GPU-accelerated high-resolution export using OpenGL FBO.
  * This class creates an offscreen rendering context for full-resolution LUT processing.
+ * Supports tiled rendering for images exceeding GL_MAX_TEXTURE_SIZE.
  */
 class GpuExportRenderer(private val context: Context) {
     
@@ -27,7 +28,7 @@ class GpuExportRenderer(private val context: Context) {
     private var fboTextureId: Int = 0
     
     private val vertexBuffer: FloatBuffer
-    private val texCoordBuffer: FloatBuffer
+    private var texCoordBuffer: FloatBuffer
     
     private var isInitialized = false
     
@@ -114,7 +115,8 @@ class GpuExportRenderer(private val context: Context) {
     /**
      * Render the image with LUT at full resolution using GPU.
      * Must be called on GL thread.
-     * Returns null if the image is too large for GPU processing.
+     * Supports tiled rendering for images exceeding GL_MAX_TEXTURE_SIZE.
+     * Returns null only if critical GPU error occurs.
      */
     fun renderHighRes(
         inputBitmap: Bitmap,
@@ -136,10 +138,43 @@ class GpuExportRenderer(private val context: Context) {
         
         android.util.Log.d("GpuExportRenderer", "Image size: ${width}x${height}, GPU max texture size: $maxTextureSize")
         
-        if (width > maxTextureSize || height > maxTextureSize) {
-            android.util.Log.w("GpuExportRenderer", "Image exceeds GPU texture limit (${width}x${height} > $maxTextureSize). Falling back to CPU.")
-            return null
+        // Upload LUT if provided (once for all tiles)
+        lut?.let {
+            GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, lutTextureId)
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR)
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR)
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE)
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE)
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_R, GLES30.GL_CLAMP_TO_EDGE)
+            // Use GL_RGB16F for MediaTek/Mali GPU compatibility
+            GLES30.glTexImage3D(GLES30.GL_TEXTURE_3D, 0, GLES30.GL_RGB16F, 
+                it.size, it.size, it.size, 0, GLES30.GL_RGB, GLES30.GL_FLOAT, it.data)
         }
+        
+        // Determine if tiling is needed
+        val needsTiling = width > maxTextureSize || height > maxTextureSize
+        
+        return if (needsTiling) {
+            android.util.Log.d("GpuExportRenderer", "Image exceeds GPU limit, using tiled rendering")
+            renderTiled(inputBitmap, lut, intensity, grainEnabled, grainIntensity, grainScale, maxTextureSize)
+        } else {
+            renderSingle(inputBitmap, lut, intensity, grainEnabled, grainIntensity, grainScale)
+        }
+    }
+    
+    /**
+     * Render a single image that fits within texture limits.
+     */
+    private fun renderSingle(
+        inputBitmap: Bitmap,
+        lut: CubeLUT?,
+        intensity: Float,
+        grainEnabled: Boolean,
+        grainIntensity: Float,
+        grainScale: Float
+    ): Bitmap? {
+        val width = inputBitmap.width
+        val height = inputBitmap.height
         
         // Setup FBO texture
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, fboTextureId)
@@ -167,26 +202,158 @@ class GpuExportRenderer(private val context: Context) {
         GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE)
         GLUtils.texImage2D(GLES30.GL_TEXTURE_2D, 0, inputBitmap, 0)
         
-        // Upload LUT if provided
-        lut?.let {
-            GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, lutTextureId)
-            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR)
-            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR)
-            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE)
-            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE)
-            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_R, GLES30.GL_CLAMP_TO_EDGE)
-            // Use GL_RGB16F for MediaTek/Mali GPU compatibility
-            // Mali requires sized internal format for float texture linear filtering
-            GLES30.glTexImage3D(GLES30.GL_TEXTURE_3D, 0, GLES30.GL_RGB16F, 
-                it.size, it.size, it.size, 0, GLES30.GL_RGB, GLES30.GL_FLOAT, it.data)
-        }
-        
         // Set viewport to full resolution
         GLES30.glViewport(0, 0, width, height)
         GLES30.glClearColor(0f, 0f, 0f, 1f)
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
         
-        // Render
+        // Render with default tex coords (full image)
+        renderQuad(lut, intensity, grainEnabled, grainIntensity, grainScale, 0f, 0f, 1f, 1f)
+        
+        // Read pixels from FBO
+        val buffer = ByteBuffer.allocateDirect(width * height * 4)
+        buffer.order(ByteOrder.nativeOrder())
+        GLES30.glReadPixels(0, 0, width, height, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, buffer)
+        buffer.rewind()
+        
+        // Create output bitmap
+        val outputBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        outputBitmap.copyPixelsFromBuffer(buffer)
+        
+        // Unbind FBO
+        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
+        
+        android.util.Log.d("GpuExportRenderer", "GPU export successful: ${width}x${height}")
+        return outputBitmap
+    }
+    
+    /**
+     * Render a large image using tiled approach.
+     * Splits the image into tiles that fit within GPU texture limits.
+     */
+    private fun renderTiled(
+        inputBitmap: Bitmap,
+        lut: CubeLUT?,
+        intensity: Float,
+        grainEnabled: Boolean,
+        grainIntensity: Float,
+        grainScale: Float,
+        maxTextureSize: Int
+    ): Bitmap? {
+        val width = inputBitmap.width
+        val height = inputBitmap.height
+        
+        // Create output bitmap
+        val outputBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        
+        // Calculate tile dimensions
+        val tileSize = maxTextureSize
+        val tilesX = (width + tileSize - 1) / tileSize
+        val tilesY = (height + tileSize - 1) / tileSize
+        
+        android.util.Log.d("GpuExportRenderer", "Tiled rendering: ${tilesX}x${tilesY} tiles (each up to ${tileSize}x${tileSize})")
+        
+        // Setup FBO texture (reuse for each tile)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, fboTextureId)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR)
+        
+        // Attach to FBO
+        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, fboId)
+        GLES30.glFramebufferTexture2D(GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0, GLES30.GL_TEXTURE_2D, fboTextureId, 0)
+        
+        for (ty in 0 until tilesY) {
+            for (tx in 0 until tilesX) {
+                val tileX = tx * tileSize
+                val tileY = ty * tileSize
+                val tileW = minOf(tileSize, width - tileX)
+                val tileH = minOf(tileSize, height - tileY)
+                
+                // Extract tile from input bitmap
+                val tileBitmap = Bitmap.createBitmap(inputBitmap, tileX, tileY, tileW, tileH)
+                
+                // Resize FBO texture for this tile
+                GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, fboTextureId)
+                GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA, tileW, tileH, 0, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, null)
+                
+                // Check FBO completeness
+                val fboStatus = GLES30.glCheckFramebufferStatus(GLES30.GL_FRAMEBUFFER)
+                if (fboStatus != GLES30.GL_FRAMEBUFFER_COMPLETE) {
+                    android.util.Log.e("GpuExportRenderer", "FBO incomplete for tile ($tx, $ty): status=$fboStatus")
+                    tileBitmap.recycle()
+                    outputBitmap.recycle()
+                    GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
+                    return null
+                }
+                
+                // Upload tile as input texture
+                GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, inputTextureId)
+                GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR)
+                GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR)
+                GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE)
+                GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE)
+                GLUtils.texImage2D(GLES30.GL_TEXTURE_2D, 0, tileBitmap, 0)
+                
+                // Set viewport for this tile
+                GLES30.glViewport(0, 0, tileW, tileH)
+                GLES30.glClearColor(0f, 0f, 0f, 1f)
+                GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
+                
+                // Render the tile (full texture coords since tile is already cropped)
+                renderQuad(lut, intensity, grainEnabled, grainIntensity, grainScale, 0f, 0f, 1f, 1f)
+                
+                // Read tile pixels
+                val tileBuffer = ByteBuffer.allocateDirect(tileW * tileH * 4)
+                tileBuffer.order(ByteOrder.nativeOrder())
+                GLES30.glReadPixels(0, 0, tileW, tileH, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, tileBuffer)
+                tileBuffer.rewind()
+                
+                // Create tile output bitmap and copy to result
+                val tileOutput = Bitmap.createBitmap(tileW, tileH, Bitmap.Config.ARGB_8888)
+                tileOutput.copyPixelsFromBuffer(tileBuffer)
+                
+                // Copy tile to output bitmap
+                val pixels = IntArray(tileW * tileH)
+                tileOutput.getPixels(pixels, 0, tileW, 0, 0, tileW, tileH)
+                outputBitmap.setPixels(pixels, 0, tileW, tileX, tileY, tileW, tileH)
+                
+                // Cleanup tile bitmaps
+                tileBitmap.recycle()
+                tileOutput.recycle()
+                
+                android.util.Log.d("GpuExportRenderer", "Tile ($tx, $ty) rendered: ${tileW}x${tileH} at ($tileX, $tileY)")
+            }
+        }
+        
+        // Unbind FBO
+        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
+        
+        android.util.Log.d("GpuExportRenderer", "Tiled GPU export successful: ${width}x${height}")
+        return outputBitmap
+    }
+    
+    /**
+     * Render a quad with the shader program.
+     */
+    private fun renderQuad(
+        lut: CubeLUT?,
+        intensity: Float,
+        grainEnabled: Boolean,
+        grainIntensity: Float,
+        grainScale: Float,
+        texU0: Float, texV0: Float, texU1: Float, texV1: Float
+    ) {
+        // Update texture coordinates if needed
+        val texCoords = floatArrayOf(
+            texU0, texV0,
+            texU1, texV0,
+            texU0, texV1,
+            texU1, texV1
+        )
+        texCoordBuffer = ByteBuffer.allocateDirect(texCoords.size * 4)
+            .order(ByteOrder.nativeOrder()).asFloatBuffer().put(texCoords)
+        texCoordBuffer.position(0)
+        
         GLES30.glUseProgram(programId)
         
         val positionHandle = GLES30.glGetAttribLocation(programId, "aPosition")
@@ -231,22 +398,6 @@ class GpuExportRenderer(private val context: Context) {
         
         GLES30.glDisableVertexAttribArray(positionHandle)
         GLES30.glDisableVertexAttribArray(texCoordHandle)
-        
-        // Read pixels from FBO
-        val buffer = ByteBuffer.allocateDirect(width * height * 4)
-        buffer.order(ByteOrder.nativeOrder())
-        GLES30.glReadPixels(0, 0, width, height, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, buffer)
-        buffer.rewind()
-        
-        // Create output bitmap
-        val outputBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        outputBitmap.copyPixelsFromBuffer(buffer)
-        
-        // Unbind FBO
-        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
-        
-        android.util.Log.d("GpuExportRenderer", "GPU export successful: ${width}x${height}")
-        return outputBitmap
     }
     
     fun release() {
