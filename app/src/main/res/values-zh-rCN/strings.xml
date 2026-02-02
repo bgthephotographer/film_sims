@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FilmSims</string>
+    
+    <!-- Image loading -->
+    <string name="image_loaded">已加载图片: %1$s (预览: %2$s)</string>
+    <string name="image_load_failed">图片加载失败: %1$s</string>
+    <string name="select_image_first">请先选择图片</string>
+    
+    <!-- Export -->
+    <string name="exporting">导出中…</string>
+    <string name="cpu_processing">CPU处理中… (大图片可能需要较长时间)</string>
+    <string name="save_error">保存错误: %1$s</string>
+    <string name="save_folder_create_failed">创建保存文件夹失败</string>
+    <string name="image_saved">已保存 (%1$s): %2$s/%3$s</string>
+    <string name="lut_load_failed">滤镜加载失败</string>
+    
+    <!-- Settings -->
+    <string name="enter_save_folder">输入保存文件夹</string>
+    <string name="save_path_hint">例如: Pictures/MyPhotos</string>
+    <string name="save">保存</string>
+    <string name="cancel">取消</string>
+    <string name="save_path_changed">保存路径已更改: %1$s</string>
+    
+    <!-- Update dialog -->
+    <string name="update_available">有可用更新</string>
+    <string name="new_version_available">新版本 %1$s 可用</string>
+    <string name="update_now">更新</string>
+    <string name="later">稍后</string>
+    <string name="update_check_failed">检查更新失败</string>
+    
+    <!-- LUT Categories - OnePlus -->
+    <string name="category_app_filters">应用滤镜</string>
+    <string name="category_artistic">艺术</string>
+    <string name="category_black_white">黑白</string>
+    <string name="category_cinematic_movie">电影</string>
+    <string name="category_cool_tones">冷色调</string>
+    <string name="category_food">美食</string>
+    <string name="category_golden_touch">金色触感</string>
+    <string name="category_instagram_filters">Instagram风格</string>
+    <string name="category_japanese_style">日系风格</string>
+    <string name="category_landscape">风景</string>
+    <string name="category_night">夜景</string>
+    <string name="category_portrait">人像</string>
+    <string name="category_uncategorized">未分类</string>
+    <string name="category_vintage_retro">复古</string>
+    <string name="category_warm_tones">暖色调</string>
+    
+    <!-- LUT Categories - Xiaomi -->
+    <string name="category_cinematic">电影</string>
+    <string name="category_film_simulation">胶片模拟</string>
+    <string name="category_monochrome">单色</string>
+    <string name="category_nature_landscape">自然风景</string>
+    <string name="category_portrait_soft">人像柔和</string>
+    <string name="category_special_effects">特效</string>
+    <string name="category_vivid_natural">鲜艳自然</string>
+    <string name="category_warm_vintage">暖色复古</string>
+    
+    <!-- LUT Categories - Nothing/Common -->
+    <string name="category_all">全部</string>
+    
+    <!-- LUT Categories - Leica_lux -->
+    <string name="category_leica_looks">Leica Looks</string>
+    <string name="category_artist_looks">艺术家风格</string>
+    
+    <!-- Brand names -->
+    <string name="brand_leica_lux">Leica LUX</string>
+    
+    <!-- Leica_lux filter names -->
+    <string name="lut_leica_classic">Leica Classic</string>
+    <string name="lut_leica_contemporary">Leica Contemporary</string>
+    <string name="lut_leica_monochrome_natural">Leica Monochrome Natural</string>
+    <string name="lut_leica_natural">Leica Natural</string>
+    <string name="lut_leica_blue">Leica Blue</string>
+    <string name="lut_leica_eternal">Leica Eternal</string>
+    <string name="lut_leica_selenium">Leica Selenium</string>
+    <string name="lut_leica_sepia">Leica Sepia</string>
+    <string name="lut_leica_silver">Leica Silver</string>
+    <string name="lut_leica_teal">Leica Teal</string>
+    <string name="lut_leica_bleach">Leica Bleach</string>
+    <string name="lut_leica_brass">Leica Brass</string>
+    <string name="lut_leica_high_contrast">Leica Monochrome High Contrast</string>
+    <string name="lut_leica_vivid">Leica Vivid</string>
+    <string name="lut_100_years_mono">100周年单色</string>
+    <string name="lut_greg_williams_sepia_0">Greg Williams 怀旧 0%</string>
+    <string name="lut_greg_williams_sepia_100">Greg Williams 怀旧 100%</string>
+    <string name="lut_leica_standard">Leica Standard</string>
+    <string name="lut_leica_chrome">Leica Chrome</string>
+</resources>

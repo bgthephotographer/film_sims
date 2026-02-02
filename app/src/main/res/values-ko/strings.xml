@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FilmSims</string>
+    
+    <!-- Image loading -->
+    <string name="image_loaded">이미지 로드됨: %1$s (미리보기: %2$s)</string>
+    <string name="image_load_failed">이미지 로드 실패: %1$s</string>
+    <string name="select_image_first">먼저 이미지를 선택해주세요</string>
+    
+    <!-- Export -->
+    <string name="exporting">내보내는 중…</string>
+    <string name="cpu_processing">CPU 처리 중… (큰 이미지는 시간이 걸릴 수 있습니다)</string>
+    <string name="save_error">저장 오류: %1$s</string>
+    <string name="save_folder_create_failed">저장 폴더 생성 실패</string>
+    <string name="image_saved">저장됨 (%1$s): %2$s/%3$s</string>
+    <string name="lut_load_failed">필터 로드 실패</string>
+    
+    <!-- Settings -->
+    <string name="enter_save_folder">저장 폴더 입력</string>
+    <string name="save_path_hint">예: Pictures/MyPhotos</string>
+    <string name="save">저장</string>
+    <string name="cancel">취소</string>
+    <string name="save_path_changed">저장 경로 변경됨: %1$s</string>
+    
+    <!-- Update dialog -->
+    <string name="update_available">업데이트 가능</string>
+    <string name="new_version_available">새 버전 %1$s 사용 가능</string>
+    <string name="update_now">업데이트</string>
+    <string name="later">나중에</string>
+    <string name="update_check_failed">업데이트 확인 실패</string>
+    
+    <!-- LUT Categories - OnePlus -->
+    <string name="category_app_filters">앱 필터</string>
+    <string name="category_artistic">아티스틱</string>
+    <string name="category_black_white">흑백</string>
+    <string name="category_cinematic_movie">시네마틱 무비</string>
+    <string name="category_cool_tones">쿨 톤</string>
+    <string name="category_food">음식</string>
+    <string name="category_golden_touch">골든 터치</string>
+    <string name="category_instagram_filters">인스타그램 스타일</string>
+    <string name="category_japanese_style">일본 스타일</string>
+    <string name="category_landscape">풍경</string>
+    <string name="category_night">야경</string>
+    <string name="category_portrait">인물</string>
+    <string name="category_uncategorized">미분류</string>
+    <string name="category_vintage_retro">빈티지-레트로</string>
+    <string name="category_warm_tones">웜 톤</string>
+    
+    <!-- LUT Categories - Xiaomi -->
+    <string name="category_cinematic">시네마틱</string>
+    <string name="category_film_simulation">필름 시뮬레이션</string>
+    <string name="category_monochrome">모노크롬</string>
+    <string name="category_nature_landscape">자연-풍경</string>
+    <string name="category_portrait_soft">인물-소프트</string>
+    <string name="category_special_effects">특수 효과</string>
+    <string name="category_vivid_natural">비비드-내추럴</string>
+    <string name="category_warm_vintage">웜-빈티지</string>
+    
+    <!-- LUT Categories - Nothing/Common -->
+    <string name="category_all">전체</string>
+    
+    <!-- LUT Categories - Leica_lux -->
+    <string name="category_leica_looks">Leica Looks</string>
+    <string name="category_artist_looks">아티스트 룩</string>
+    
+    <!-- Brand names -->
+    <string name="brand_leica_lux">Leica LUX</string>
+    
+    <!-- Leica_lux filter names -->
+    <string name="lut_leica_classic">Leica Classic</string>
+    <string name="lut_leica_contemporary">Leica Contemporary</string>
+    <string name="lut_leica_monochrome_natural">Leica Monochrome Natural</string>
+    <string name="lut_leica_natural">Leica Natural</string>
+    <string name="lut_leica_blue">Leica Blue</string>
+    <string name="lut_leica_eternal">Leica Eternal</string>
+    <string name="lut_leica_selenium">Leica Selenium</string>
+    <string name="lut_leica_sepia">Leica Sepia</string>
+    <string name="lut_leica_silver">Leica Silver</string>
+    <string name="lut_leica_teal">Leica Teal</string>
+    <string name="lut_leica_bleach">Leica Bleach</string>
+    <string name="lut_leica_brass">Leica Brass</string>
+    <string name="lut_leica_high_contrast">Leica Monochrome High Contrast</string>
+    <string name="lut_leica_vivid">Leica Vivid</string>
+    <string name="lut_100_years_mono">100주년 모노크롬</string>
+    <string name="lut_greg_williams_sepia_0">Greg Williams 세피아 0%</string>
+    <string name="lut_greg_williams_sepia_100">Greg Williams 세피아 100%</string>
+    <string name="lut_leica_standard">Leica Standard</string>
+    <string name="lut_leica_chrome">Leica Chrome</string>
+</resources>

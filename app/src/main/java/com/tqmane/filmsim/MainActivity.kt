@@ -53,6 +53,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import android.content.Intent
+import com.tqmane.filmsim.util.UpdateChecker
+import com.tqmane.filmsim.util.ReleaseInfo
 
 
 class MainActivity : ComponentActivity() {
@@ -160,7 +163,7 @@ class MainActivity : ComponentActivity() {
                         
                         Toast.makeText(
                             this@MainActivity, 
-                            "画像を読み込みました: ${bitmap.width}x${bitmap.height} (プレビュー: ${previewBitmap.width}x${previewBitmap.height})", 
+                            getString(R.string.image_loaded, "${bitmap.width}x${bitmap.height}", "${previewBitmap.width}x${previewBitmap.height}"), 
                             Toast.LENGTH_SHORT
                         ).show()
                     }
@@ -168,7 +171,7 @@ class MainActivity : ComponentActivity() {
             } catch (e: Exception) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@MainActivity, "画像の読み込みに失敗しました: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, getString(R.string.image_load_failed, e.message ?: ""), Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -211,6 +214,63 @@ class MainActivity : ComponentActivity() {
         setupViews()
         setupLutList()
         createDefaultThumbnail()
+        
+        // Check for updates
+        checkForUpdates()
+    }
+    
+    private fun checkForUpdates() {
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                val release = UpdateChecker.checkForUpdate(this@MainActivity)
+                if (release != null) {
+                    showUpdateDialog(release)
+                }
+            } catch (e: Exception) {
+                // Silently ignore update check failures
+                e.printStackTrace()
+            }
+        }
+    }
+    
+    private fun showUpdateDialog(release: ReleaseInfo) {
+        val dialog = Dialog(this, R.style.Theme_FilmSims)
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        dialog.setContentView(R.layout.dialog_update)
+        
+        // Set dialog width
+        val displayMetrics = resources.displayMetrics
+        val dialogWidth = (displayMetrics.widthPixels * 0.90).toInt()
+        dialog.window?.setLayout(
+            dialogWidth,
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        
+        val tvVersionInfo = dialog.findViewById<TextView>(R.id.tvVersionInfo)
+        val tvReleaseNotes = dialog.findViewById<TextView>(R.id.tvReleaseNotes)
+        val btnLater = dialog.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnLater)
+        val btnUpdate = dialog.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnUpdate)
+        
+        tvVersionInfo.text = getString(R.string.new_version_available, release.version)
+        
+        if (release.releaseNotes.isNotBlank()) {
+            tvReleaseNotes.visibility = View.VISIBLE
+            tvReleaseNotes.text = release.releaseNotes
+        }
+        
+        btnLater.setOnClickListener {
+            UpdateChecker.skipVersion(this, release.version)
+            dialog.dismiss()
+        }
+        
+        btnUpdate.setOnClickListener {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(release.htmlUrl))
+            startActivity(intent)
+            dialog.dismiss()
+        }
+        
+        dialog.show()
     }
     
     private fun setupViews() {
@@ -394,7 +454,7 @@ class MainActivity : ComponentActivity() {
         val btnSave = findViewById<com.google.android.material.button.MaterialButton>(R.id.btnSave)
         btnSave.setOnClickListener {
             if (originalBitmap == null) {
-                Toast.makeText(this, "先に画像を選択してください", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.select_image_first), Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             saveHighResImage()
@@ -650,23 +710,23 @@ class MainActivity : ComponentActivity() {
             setText(savePath)
             setTextColor(Color.WHITE)
             setHintTextColor(Color.GRAY)
-            hint = "例: Pictures/MyPhotos"
+            hint = getString(R.string.save_path_hint)
             setPadding(48, 32, 48, 32)
         }
         
         AlertDialog.Builder(this, R.style.Theme_FilmSims)
-            .setTitle("保存先フォルダを入力")
+            .setTitle(getString(R.string.enter_save_folder))
             .setView(editText)
-            .setPositiveButton("保存") { _, _ ->
+            .setPositiveButton(getString(R.string.save)) { _, _ ->
                 val newPath = editText.text.toString().trim()
                 if (newPath.isNotEmpty()) {
                     savePath = newPath
                     prefs.edit().putString("save_path", newPath).apply()
                     tvSavePath.text = newPath
-                    Toast.makeText(this, "保存先を変更しました: $newPath", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.save_path_changed, newPath), Toast.LENGTH_SHORT).show()
                 }
             }
-            .setNegativeButton("キャンセル", null)
+            .setNegativeButton(getString(R.string.cancel), null)
             .show()
     }
 
@@ -791,7 +851,7 @@ class MainActivity : ComponentActivity() {
                 }
             } else {
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@MainActivity, "Failed to load LUT", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, getString(R.string.lut_load_failed), Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -801,7 +861,7 @@ class MainActivity : ComponentActivity() {
         val sourceBitmap = originalBitmap ?: return
         val lutPath = currentLutPath
         
-        Toast.makeText(this, "書き出し中...", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, getString(R.string.exporting), Toast.LENGTH_SHORT).show()
         
         // Parse LUT first (can be done off main thread)
         CoroutineScope(Dispatchers.IO).launch {
@@ -846,7 +906,7 @@ class MainActivity : ComponentActivity() {
                     android.util.Log.d("MainActivity", "GPU export failed or unavailable, falling back to CPU processing...")
                     
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(this@MainActivity, "CPUで処理中... (大きな画像は時間がかかります)", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@MainActivity, getString(R.string.cpu_processing), Toast.LENGTH_SHORT).show()
                     }
                     
                     // CPU fallback
@@ -871,7 +931,7 @@ class MainActivity : ComponentActivity() {
             } catch (e: Exception) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@MainActivity, "保存エラー: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, getString(R.string.save_error, e.message ?: ""), Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -893,7 +953,7 @@ class MainActivity : ComponentActivity() {
 
         if (uri == null) {
             withContext(Dispatchers.Main) {
-                Toast.makeText(this@MainActivity, "保存先の作成に失敗しました", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, getString(R.string.save_folder_create_failed), Toast.LENGTH_SHORT).show()
             }
             return
         }
@@ -986,14 +1046,14 @@ class MainActivity : ComponentActivity() {
             withContext(Dispatchers.Main) {
                 Toast.makeText(
                     this@MainActivity, 
-                    "保存しました (${bitmap.width}x${bitmap.height}): $savePath/$filename", 
+                    getString(R.string.image_saved, "${bitmap.width}x${bitmap.height}", savePath, filename), 
                     Toast.LENGTH_LONG
                 ).show()
             }
         } catch (e: Exception) {
             e.printStackTrace()
             withContext(Dispatchers.Main) {
-                Toast.makeText(this@MainActivity, "保存エラー: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, getString(R.string.save_error, e.message ?: ""), Toast.LENGTH_SHORT).show()
             }
         }
     }

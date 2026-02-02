@@ -13,8 +13,8 @@ android {
         applicationId = "com.tqmane.filmsim"
         minSdk = 33
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.0.0"
+        versionCode = 5
+        versionName = "1.0.1"
     }
 
     buildTypes {
@@ -22,6 +22,9 @@ android {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+    }
+    buildFeatures {
+        buildConfig = true
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -42,4 +45,7 @@ dependencies {
     implementation("androidx.constraintlayout:constraintlayout:2.2.0")
     implementation("androidx.activity:activity-ktx:1.9.0")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
+    
+    // For update checking
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }

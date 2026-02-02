@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FilmSims</string>
+    
+    <!-- Image loading -->
+    <string name="image_loaded">Image loaded: %1$s (Preview: %2$s)</string>
+    <string name="image_load_failed">Failed to load image: %1$s</string>
+    <string name="select_image_first">Please select an image first</string>
+    
+    <!-- Export -->
+    <string name="exporting">Exporting…</string>
+    <string name="cpu_processing">CPU processing… (Large images may take time)</string>
+    <string name="save_error">Save error: %1$s</string>
+    <string name="save_folder_create_failed">Failed to create save folder</string>
+    <string name="image_saved">Saved (%1$s): %2$s/%3$s</string>
+    <string name="lut_load_failed">Failed to load filter</string>
+    
+    <!-- Settings -->
+    <string name="enter_save_folder">Enter save folder</string>
+    <string name="save_path_hint">e.g. Pictures/MyPhotos</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="save_path_changed">Save path changed: %1$s</string>
+    
+    <!-- Update dialog -->
+    <string name="update_available">Update Available</string>
+    <string name="new_version_available">New version %1$s is available</string>
+    <string name="update_now">Update</string>
+    <string name="later">Later</string>
+    <string name="update_check_failed">Failed to check for updates</string>
+    
+    <!-- LUT Categories - OnePlus -->
+    <string name="category_app_filters">App Filters</string>
+    <string name="category_artistic">Artistic</string>
+    <string name="category_black_white">Black \u0026 White</string>
+    <string name="category_cinematic_movie">Cinematic Movie</string>
+    <string name="category_cool_tones">Cool Tones</string>
+    <string name="category_food">Food</string>
+    <string name="category_golden_touch">Golden Touch</string>
+    <string name="category_instagram_filters">Instagram Filters</string>
+    <string name="category_japanese_style">Japanese Style</string>
+    <string name="category_landscape">Landscape</string>
+    <string name="category_night">Night</string>
+    <string name="category_portrait">Portrait</string>
+    <string name="category_uncategorized">Uncategorized</string>
+    <string name="category_vintage_retro">Vintage-Retro</string>
+    <string name="category_warm_tones">Warm Tones</string>
+    
+    <!-- LUT Categories - Xiaomi -->
+    <string name="category_cinematic">Cinematic</string>
+    <string name="category_film_simulation">Film Simulation</string>
+    <string name="category_monochrome">Monochrome</string>
+    <string name="category_nature_landscape">Nature-Landscape</string>
+    <string name="category_portrait_soft">Portrait-Soft</string>
+    <string name="category_special_effects">Special Effects</string>
+    <string name="category_vivid_natural">Vivid-Natural</string>
+    <string name="category_warm_vintage">Warm-Vintage</string>
+    
+    <!-- LUT Categories - Nothing/Common -->
+    <string name="category_all">All</string>
+    
+    <!-- LUT Categories - Leica_lux -->
+    <string name="category_leica_looks">Leica Looks</string>
+    <string name="category_artist_looks">Artist Looks</string>
+    
+    <!-- Brand names -->
+    <string name="brand_leica_lux">Leica LUX</string>
+    
+    <!-- Leica_lux filter names -->
+    <string name="lut_leica_classic">Leica Classic</string>
+    <string name="lut_leica_contemporary">Leica Contemporary</string>
+    <string name="lut_leica_monochrome_natural">Leica Monochrome Natural</string>
+    <string name="lut_leica_natural">Leica Natural</string>
+    <string name="lut_leica_blue">Leica Blue</string>
+    <string name="lut_leica_eternal">Leica Eternal</string>
+    <string name="lut_leica_selenium">Leica Selenium</string>
+    <string name="lut_leica_sepia">Leica Sepia</string>
+    <string name="lut_leica_silver">Leica Silver</string>
+    <string name="lut_leica_teal">Leica Teal</string>
+    <string name="lut_leica_bleach">Leica Bleach</string>
+    <string name="lut_leica_brass">Leica Brass</string>
+    <string name="lut_leica_high_contrast">Leica Monochrome High Contrast</string>
+    <string name="lut_leica_vivid">Leica Vivid</string>
+    <string name="lut_100_years_mono">100 Years Mono</string>
+    <string name="lut_greg_williams_sepia_0">Greg Williams Sepia 0%</string>
+    <string name="lut_greg_williams_sepia_100">Greg Williams Sepia 100%</string>
+    <string name="lut_leica_standard">Leica Standard</string>
+    <string name="lut_leica_chrome">Leica Chrome</string>
+</resources>
