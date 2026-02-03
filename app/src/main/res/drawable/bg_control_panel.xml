@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Main glass background -->
+    <!-- Main glass background - deeper, more refined -->
     <item>
         <shape android:shape="rectangle">
-            <solid android:color="@color/glass_bg" />
+            <solid android:color="#F2101014" />
             <corners
-                android:topLeftRadius="32dp"
-                android:topRightRadius="32dp" />
+                android:topLeftRadius="28dp"
+                android:topRightRadius="28dp" />
         </shape>
     </item>
     <!-- Inner gradient for depth -->
@@ -16,39 +16,39 @@
                 android:type="linear"
                 android:angle="90"
                 android:startColor="#00000000"
-                android:endColor="#08FFFFFF" />
+                android:endColor="#06FFFFFF" />
             <corners
-                android:topLeftRadius="32dp"
-                android:topRightRadius="32dp" />
+                android:topLeftRadius="28dp"
+                android:topRightRadius="28dp" />
         </shape>
     </item>
-    <!-- Top edge highlight (glass reflection effect) -->
+    <!-- Top edge highlight (subtle glass reflection) -->
     <item
         android:top="0dp"
-        android:left="40dp"
-        android:right="40dp">
+        android:left="48dp"
+        android:right="48dp">
         <shape android:shape="rectangle">
             <gradient
                 android:type="linear"
                 android:angle="0"
                 android:startColor="#00FFFFFF"
-                android:centerColor="#25FFFFFF"
+                android:centerColor="#18FFFFFF"
                 android:endColor="#00FFFFFF" />
             <size android:height="1dp" />
             <corners
-                android:topLeftRadius="32dp"
-                android:topRightRadius="32dp" />
+                android:topLeftRadius="28dp"
+                android:topRightRadius="28dp" />
         </shape>
     </item>
-    <!-- Border stroke -->
+    <!-- Border stroke - subtle -->
     <item>
         <shape android:shape="rectangle">
             <stroke
                 android:width="1dp"
-                android:color="@color/glass_border_light" />
+                android:color="#10FFFFFF" />
             <corners
-                android:topLeftRadius="32dp"
-                android:topRightRadius="32dp" />
+                android:topLeftRadius="28dp"
+                android:topRightRadius="28dp" />
         </shape>
     </item>
     <!-- Subtle accent glow at top center -->
@@ -56,14 +56,14 @@
         <shape android:shape="rectangle">
             <gradient
                 android:type="radial"
-                android:gradientRadius="200dp"
+                android:gradientRadius="180dp"
                 android:centerX="50%"
-                android:centerY="-10%"
-                android:startColor="#15FF6B35"
+                android:centerY="-5%"
+                android:startColor="#10FFAB60"
                 android:endColor="#00000000" />
             <corners
-                android:topLeftRadius="32dp"
-                android:topRightRadius="32dp" />
+                android:topLeftRadius="28dp"
+                android:topRightRadius="28dp" />
         </shape>
     </item>
 </layer-list>

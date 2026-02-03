@@ -5,28 +5,39 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:gravity="center"
-    android:paddingEnd="12dp"
-    android:paddingBottom="6dp"
+    android:paddingStart="4dp"
+    android:paddingEnd="8dp"
+    android:paddingTop="4dp"
+    android:paddingBottom="4dp"
     android:clipChildren="false"
     android:clipToPadding="false">
 
-    <!-- Card with Glass Effect -->
+    <!-- Card with Refined Border -->
     <FrameLayout
         android:id="@+id/lutCardContainer"
-        android:layout_width="96dp"
-        android:layout_height="96dp"
-        android:background="@drawable/bg_lut_selector"
-        android:padding="3dp"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
         android:clipChildren="false"
         android:clipToPadding="false">
 
+        <!-- Glow layer (behind the card) -->
+        <View
+            android:id="@+id/glowView"
+            android:layout_width="76dp"
+            android:layout_height="76dp"
+            android:layout_gravity="center"
+            android:background="@drawable/bg_lut_glow"
+            android:visibility="gone" />
+
+        <!-- Main card -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            app:cardCornerRadius="13dp"
+            android:layout_gravity="center"
+            app:cardCornerRadius="10dp"
             app:cardElevation="0dp"
             app:strokeWidth="0dp"
-            app:cardBackgroundColor="#FF1A1A1F">
+            app:cardBackgroundColor="#FF151519">
             
             <ImageView
                 android:id="@+id/lutPreview"
@@ -36,19 +47,27 @@
                 
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- Selection border overlay -->
+        <View
+            android:id="@+id/selectionBorder"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_lut_border"
+            android:visibility="gone" />
+
     </FrameLayout>
 
     <TextView
         android:id="@+id/lutName"
-        android:layout_width="96dp"
+        android:layout_width="72dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="4dp"
         android:gravity="center"
         android:text="LUT Name"
         android:textColor="@color/text_secondary"
-        android:textSize="11sp"
+        android:textSize="9sp"
         android:fontFamily="sans-serif"
-        android:letterSpacing="0.02"
+        android:letterSpacing="0.01"
         android:maxLines="1"
         android:ellipsize="end" />
 

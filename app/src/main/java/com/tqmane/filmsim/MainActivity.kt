@@ -140,6 +140,9 @@ class MainActivity : ComponentActivity() {
                         // Hide placeholder
                         placeholderContainer.visibility = View.GONE
                         
+                        // Reset zoom position for new image
+                        resetZoom()
+                        
                         // Update GL View for preview (using scaled bitmap)
                         glSurfaceView.queueEvent {
                             renderer.setImage(previewBitmap)
@@ -178,13 +181,9 @@ class MainActivity : ComponentActivity() {
     }
     
     private fun extractExifBytes(uri: Uri): ByteArray? {
-        return try {
-            contentResolver.openInputStream(uri)?.use { stream ->
-                stream.readBytes()
-            }
-        } catch (e: Exception) {
-            null
-        }
+        // EXIF data is small, no need to store full file bytes
+        // We'll read EXIF directly when saving
+        return null
     }
     
     private fun scaleToMaxPixels(bitmap: Bitmap, maxPixels: Int): Bitmap {
@@ -306,12 +305,16 @@ class MainActivity : ComponentActivity() {
         })
 
         scaleGestureDetector = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
-            private var lastFocusX = 0f
-            private var lastFocusY = 0f
+            private var initialFocusX = 0f
+            private var initialFocusY = 0f
+            private var prevFocusX = 0f
+            private var prevFocusY = 0f
 
             override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
-                lastFocusX = detector.focusX
-                lastFocusY = detector.focusY
+                initialFocusX = detector.focusX
+                initialFocusY = detector.focusY
+                prevFocusX = detector.focusX
+                prevFocusY = detector.focusY
                 return true
             }
 
@@ -327,46 +330,54 @@ class MainActivity : ComponentActivity() {
                 // Calculate what the new scale would be
                 val newScale = currentScale * scaleFactor
 
-                // PAN: Calculate movement of the focal point
-                val dx = focusX - lastFocusX
-                val dy = focusY - lastFocusY
-
-                // Check if scale would be within bounds and significantly different from 1.0
+                // Check if scale would be within bounds
                 val canScale = newScale >= 0.5f && newScale <= 10.0f && kotlin.math.abs(scaleFactor - 1.0f) > 0.001f
 
                 if (canScale) {
-                    // Apply scale FIRST around the focal point
+                    // Scale around current focus point
                     transformMatrix.postScale(scaleFactor, scaleFactor, focusX, focusY)
                 }
 
-                // Then apply pan (always allow panning during pinch)
+                // Pan: movement from previous focus to current focus
+                val dx = focusX - prevFocusX
+                val dy = focusY - prevFocusY
                 transformMatrix.postTranslate(dx, dy)
 
                 updateGLViewTransform()
 
-                // Update state for next frame / seamless transition
-                lastFocusX = focusX
-                lastFocusY = focusY
-                lastTouchX = focusX
-                lastTouchY = focusY
+                // Store current focus for next frame
+                prevFocusX = focusX
+                prevFocusY = focusY
 
                 return true
+            }
+            
+            override fun onScaleEnd(detector: ScaleGestureDetector) {
+                // Do nothing - let ACTION_POINTER_UP handle the transition
             }
         })
         
         glSurfaceView.setOnTouchListener { _, event ->
+            // Always pass events to detectors
             scaleGestureDetector.onTouchEvent(event)
             gestureDetector.onTouchEvent(event)
             
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    lastTouchX = event.getX(0)
-                    lastTouchY = event.getY(0)
+                    lastTouchX = event.x
+                    lastTouchY = event.y
                     activePointerId = event.getPointerId(0)
                 }
+                MotionEvent.ACTION_POINTER_DOWN -> {
+                    // Second finger down - stop single-finger panning
+                    // Scale gesture detector will handle from here
+                    activePointerId = MotionEvent.INVALID_POINTER_ID
+                }
                 MotionEvent.ACTION_MOVE -> {
-                    // Only pan if NOT scaling
-                    if (!scaleGestureDetector.isInProgress && activePointerId != MotionEvent.INVALID_POINTER_ID) {
+                    // Only pan if single finger and NOT scaling
+                    if (!scaleGestureDetector.isInProgress && 
+                        activePointerId != MotionEvent.INVALID_POINTER_ID &&
+                        event.pointerCount == 1) {
                         val pointerIndex = event.findPointerIndex(activePointerId)
                         if (pointerIndex >= 0) {
                             val x = event.getX(pointerIndex)
@@ -380,11 +391,6 @@ class MainActivity : ComponentActivity() {
                             lastTouchX = x
                             lastTouchY = y
                         }
-                    } else if (scaleGestureDetector.isInProgress) {
-                        // While scaling, keep updating touch coordinates to the focus point
-                        // This ensures that if one finger is lifted, panning resumes smoothly
-                        lastTouchX = scaleGestureDetector.focusX
-                        lastTouchY = scaleGestureDetector.focusY
                     }
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
@@ -394,15 +400,16 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 MotionEvent.ACTION_POINTER_UP -> {
-                    val pointerIndex = event.actionIndex
-                    val pointerId = event.getPointerId(pointerIndex)
-                    if (pointerId == activePointerId) {
-                        val newPointerIndex = if (pointerIndex == 0) 1 else 0
-                        if (newPointerIndex < event.pointerCount) {
-                            lastTouchX = event.getX(newPointerIndex)
-                            lastTouchY = event.getY(newPointerIndex)
-                            activePointerId = event.getPointerId(newPointerIndex)
-                        }
+                    // One finger lifted while two were down
+                    val actionIndex = event.actionIndex
+                    
+                    // Find which finger remains
+                    val remainingIndex = if (actionIndex == 0) 1 else 0
+                    if (remainingIndex < event.pointerCount) {
+                        // Set up for single-finger panning with remaining finger
+                        lastTouchX = event.getX(remainingIndex)
+                        lastTouchY = event.getY(remainingIndex)
+                        activePointerId = event.getPointerId(remainingIndex)
                     }
                 }
             }
@@ -589,7 +596,21 @@ class MainActivity : ComponentActivity() {
     
     private fun resetZoom() {
         transformMatrix.reset()
+        // Apply initial vertical offset to avoid overlap with control panel
+        applyInitialTransformOffset()
         updateGLViewTransform()
+    }
+    
+    private fun applyInitialTransformOffset() {
+        // Get the control panel height and offset the image upward by half of it
+        controlPanel.post {
+            val panelHeight = controlPanel.height.toFloat()
+            val topBarHeight = topBar.height.toFloat()
+            // Center the image in the visible area (between top bar and control panel)
+            val offset = (topBarHeight - panelHeight) / 2f
+            transformMatrix.postTranslate(0f, offset)
+            updateGLViewTransform()
+        }
     }
     
     private fun toggleImmersiveMode() {

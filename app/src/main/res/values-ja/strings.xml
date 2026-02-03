@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FilmSims</string>
+    
+    <!-- Image loading -->
+    <string name="image_loaded">画像を読み込みました: %1$s (プレビュー: %2$s)</string>
+    <string name="image_load_failed">画像の読み込みに失敗しました: %1$s</string>
+    <string name="select_image_first">先に画像を選択してください</string>
+    
+    <!-- Export -->
+    <string name="exporting">書き出し中…</string>
+    <string name="cpu_processing">CPUで処理中… (大きな画像は時間がかかります)</string>
+    <string name="save_error">保存エラー: %1$s</string>
+    <string name="save_folder_create_failed">保存先の作成に失敗しました</string>
+    <string name="image_saved">保存しました (%1$s): %2$s/%3$s</string>
+    <string name="lut_load_failed">フィルターの読み込みに失敗しました</string>
+    
+    <!-- Settings -->
+    <string name="enter_save_folder">保存先フォルダを入力</string>
+    <string name="save_path_hint">例: Pictures/MyPhotos</string>
+    <string name="save">保存</string>
+    <string name="cancel">キャンセル</string>
+    <string name="save_path_changed">保存先を変更しました: %1$s</string>
+    
+    <!-- Update dialog -->
+    <string name="update_available">アップデートがあります</string>
+    <string name="new_version_available">新しいバージョン %1$s が利用可能です</string>
+    <string name="update_now">更新する</string>
+    <string name="later">後で</string>
+    <string name="update_check_failed">更新の確認に失敗しました</string>
+    
+    <!-- LUT Categories - OnePlus -->
+    <string name="category_app_filters">アプリフィルター</string>
+    <string name="category_artistic">アーティスティック</string>
+    <string name="category_black_white">モノクロ</string>
+    <string name="category_cinematic_movie">シネマティック</string>
+    <string name="category_cool_tones">クールトーン</string>
+    <string name="category_food">フード</string>
+    <string name="category_golden_touch">ゴールデンタッチ</string>
+    <string name="category_instagram_filters">Instagram風</string>
+    <string name="category_japanese_style">日本風</string>
+    <string name="category_landscape">風景</string>
+    <string name="category_night">夜景</string>
+    <string name="category_portrait">ポートレート</string>
+    <string name="category_uncategorized">未分類</string>
+    <string name="category_vintage_retro">ヴィンテージ・レトロ</string>
+    <string name="category_warm_tones">ウォームトーン</string>
+    
+    <!-- LUT Categories - Xiaomi -->
+    <string name="category_cinematic">シネマティック</string>
+    <string name="category_film_simulation">フィルムシミュレーション</string>
+    <string name="category_monochrome">モノクロ</string>
+    <string name="category_nature_landscape">自然・風景</string>
+    <string name="category_portrait_soft">ポートレート・ソフト</string>
+    <string name="category_special_effects">特殊効果</string>
+    <string name="category_vivid_natural">ビビッド・ナチュラル</string>
+    <string name="category_warm_vintage">ウォーム・ヴィンテージ</string>
+    
+    <!-- LUT Categories - Nothing/Common -->
+    <string name="category_all">すべて</string>
+    
+    <!-- LUT Categories - Leica_lux -->
+    <string name="category_leica_looks">Leica Looks</string>
+    <string name="category_artist_looks">アーティストルックス</string>
+    
+    <!-- Brand names -->
+    <string name="brand_leica_lux">Leica LUX</string>
+    
+    <!-- Leica_lux filter names -->
+    <string name="lut_leica_classic">ライカ クラシック</string>
+    <string name="lut_leica_contemporary">ライカ コンテンポラリー</string>
+    <string name="lut_leica_monochrome_natural">ライカ モノクローム ナチュラル</string>
+    <string name="lut_leica_natural">ライカ ナチュラル</string>
+    <string name="lut_leica_blue">ライカ ブルー</string>
+    <string name="lut_leica_eternal">ライカ エターナル</string>
+    <string name="lut_leica_selenium">ライカ セレニウム</string>
+    <string name="lut_leica_sepia">ライカ セピア</string>
+    <string name="lut_leica_silver">ライカ シルバー</string>
+    <string name="lut_leica_teal">ライカ ティール</string>
+    <string name="lut_leica_bleach">ライカ ブリーチ</string>
+    <string name="lut_leica_brass">ライカ ブラス</string>
+    <string name="lut_leica_high_contrast">ライカ モノクローム ハイコントラスト</string>
+    <string name="lut_leica_vivid">ライカ ビビッド</string>
+    <string name="lut_100_years_mono">100周年モノクロ</string>
+    <string name="lut_greg_williams_sepia_0">Greg Williams セピア 0%</string>
+    <string name="lut_greg_williams_sepia_100">Greg Williams セピア 100%</string>
+    <string name="lut_leica_standard">ライカ スタンダード</string>
+    <string name="lut_leica_chrome">ライカ クローム</string>
+
+    <!-- UI Labels -->
+    <string name="subtitle_film_simulator">フィルムシミュレーター</string>
+    <string name="label_pick_image">画像を選択</string>
+    <string name="desc_pick_image">写真を選んでフィルムシミュレーションを適用</string>
+    <string name="btn_open_gallery">ギャラリーを開く</string>
+    <string name="header_grain">グレイン</string>
+    <string name="label_film_grain">フィルムグレイン</string>
+    <string name="header_camera">カメラ</string>
+    <string name="header_style">スタイル</string>
+    <string name="label_intensity">強度</string>
+    <string name="header_presets">プリセット</string>
+    <string name="title_settings">設定</string>
+    <string name="label_save_folder">保存先フォルダ</string>
+    <string name="btn_change">変更</string>
+    <string name="label_quality">保存品質</string>
+    <string name="btn_close">閉じる</string>
+</resources>

@@ -22,7 +22,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.concurrent.ConcurrentHashMap
+import java.util.LinkedHashMap
 
 class LutAdapter(
     private var items: List<LutItem>,
@@ -33,49 +33,64 @@ class LutAdapter(
     private var selectedPosition = -1
     private var sourceThumbnail: Bitmap? = null
     
-    // In-memory LUT cache (aggressive caching)
-    private val lutCache = ConcurrentHashMap<String, CubeLUT>()
+    // In-memory LUT cache with size limit to prevent OOM
+    private val lutCache = object : LinkedHashMap<String, CubeLUT>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CubeLUT>?): Boolean {
+            return size > MAX_LUT_CACHE_SIZE
+        }
+    }
     
-    // Thumbnail cache
-    private val thumbnailCache = ConcurrentHashMap<String, Bitmap>()
+    // Thumbnail cache with size limit
+    private val thumbnailCache = object : LinkedHashMap<String, Bitmap>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Bitmap>?): Boolean {
+            return size > MAX_THUMBNAIL_CACHE_SIZE
+        }
+    }
     
-    // Use all available cores for parallel processing
+    // Use limited cores for parallel processing to avoid memory pressure
     private val adapterScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     
     // Pre-loading jobs
     private var preloadJob: Job? = null
     private var lutPreloadJob: Job? = null
+    
+    companion object {
+        private const val MAX_LUT_CACHE_SIZE = 20 // Limit cached LUTs
+        private const val MAX_THUMBNAIL_CACHE_SIZE = 50 // Limit cached thumbnails
+    }
 
     fun setSourceBitmap(bitmap: Bitmap?) {
         this.sourceThumbnail = bitmap
-        thumbnailCache.clear()
+        synchronized(thumbnailCache) { thumbnailCache.clear() }
         notifyDataSetChanged()
         
         if (bitmap != null) {
-            // Aggressively pre-load ALL thumbnails in parallel
+            // Pre-load thumbnails in batches
             preloadAllThumbnails(bitmap)
         }
     }
     
     /**
-     * Pre-load ALL LUTs into memory for instant access
+     * Pre-load LUTs with memory-conscious batch size
      */
     fun preloadAllLuts() {
         lutPreloadJob?.cancel()
         lutPreloadJob = adapterScope.launch {
-            // Load ALL LUTs in parallel batches
-            val batchSize = Runtime.getRuntime().availableProcessors() * 2
+            // Use smaller batch size to avoid memory pressure
+            val batchSize = minOf(4, Runtime.getRuntime().availableProcessors())
             items.chunked(batchSize).forEach { batch ->
                 val jobs = batch.map { item ->
                     async {
-                        if (!lutCache.containsKey(item.assetPath)) {
-                            try {
-                                val lut = CubeLUTParser.parse(context, item.assetPath)
-                                if (lut != null) {
-                                    lutCache[item.assetPath] = lut
+                        synchronized(lutCache) {
+                            if (!lutCache.containsKey(item.assetPath)) {
+                                try {
+                                    val lut = CubeLUTParser.parse(context, item.assetPath)
+                                    if (lut != null) {
+                                        lutCache[item.assetPath] = lut
+                                    }
+                                } catch (e: Exception) {
+                                    // Ignore
                                 }
-                            } catch (e: Exception) {
-                                // Ignore
                             }
                         }
                     }
@@ -88,25 +103,33 @@ class LutAdapter(
     private fun preloadAllThumbnails(source: Bitmap) {
         preloadJob?.cancel()
         preloadJob = adapterScope.launch {
-            // Process ALL items in parallel batches
-            val batchSize = Runtime.getRuntime().availableProcessors() * 2
+            // Use smaller batch size to avoid memory pressure
+            val batchSize = minOf(4, Runtime.getRuntime().availableProcessors())
             
             items.chunked(batchSize).forEachIndexed { batchIdx, batch ->
                 val jobs = batch.mapIndexed { idx, item ->
                     async {
-                        if (!thumbnailCache.containsKey(item.assetPath)) {
+                        val cached = synchronized(thumbnailCache) { thumbnailCache[item.assetPath] }
+                        if (cached == null) {
                             try {
-                                val lut = lutCache.getOrPut(item.assetPath) {
-                                    CubeLUTParser.parse(context, item.assetPath) ?: return@async null
-                                }
+                                val lut = synchronized(lutCache) {
+                                    lutCache[item.assetPath] ?: run {
+                                        val parsed = CubeLUTParser.parse(context, item.assetPath)
+                                        if (parsed != null) lutCache[item.assetPath] = parsed
+                                        parsed
+                                    }
+                                } ?: return@async null
+                                
                                 val result = LutBitmapProcessor.applyLutToBitmap(source, lut)
-                                thumbnailCache[item.assetPath] = result
+                                synchronized(thumbnailCache) {
+                                    thumbnailCache[item.assetPath] = result
+                                }
                                 result
                             } catch (e: Exception) {
                                 null
                             }
                         } else {
-                            thumbnailCache[item.assetPath]
+                            cached
                         }
                     }
                 }
@@ -126,6 +149,8 @@ class LutAdapter(
         val textView: TextView = view.findViewById(R.id.lutName)
         val imageView: ImageView = view.findViewById(R.id.lutPreview)
         val cardContainer: View = view.findViewById(R.id.lutCardContainer)
+        val glowView: View = view.findViewById(R.id.glowView)
+        val selectionBorder: View = view.findViewById(R.id.selectionBorder)
         var loadJob: Job? = null
     }
 
@@ -143,8 +168,12 @@ class LutAdapter(
         val isSelected = (position == selectedPosition)
         holder.cardContainer.isSelected = isSelected
         
+        // Show/hide glow and border for selection
+        holder.glowView.visibility = if (isSelected) View.VISIBLE else View.GONE
+        holder.selectionBorder.visibility = if (isSelected) View.VISIBLE else View.GONE
+        
         // Animate scale for selected state
-        val targetScale = if (isSelected) 1.05f else 1.0f
+        val targetScale = if (isSelected) 1.02f else 1.0f
         holder.itemView.animate()
             .scaleX(targetScale)
             .scaleY(targetScale)
@@ -159,23 +188,29 @@ class LutAdapter(
         val currentThumb = sourceThumbnail ?: return
         
         // Check cache immediately
-        val cached = thumbnailCache[item.assetPath]
+        val cached = synchronized(thumbnailCache) { thumbnailCache[item.assetPath] }
         if (cached != null) {
             holder.imageView.setImageBitmap(cached)
         } else {
             // Generate if not cached (fallback for racing condition)
             holder.loadJob = adapterScope.launch(Dispatchers.Default) {
                 val result = try {
-                    val lut = lutCache.getOrPut(item.assetPath) {
-                        CubeLUTParser.parse(context, item.assetPath) ?: return@launch
-                    }
+                    val lut = synchronized(lutCache) {
+                        lutCache[item.assetPath] ?: run {
+                            val parsed = CubeLUTParser.parse(context, item.assetPath)
+                            if (parsed != null) lutCache[item.assetPath] = parsed
+                            parsed
+                        }
+                    } ?: return@launch
                     LutBitmapProcessor.applyLutToBitmap(currentThumb, lut)
                 } catch (e: Exception) {
                     null
                 }
                 
                 if (result != null) {
-                    thumbnailCache[item.assetPath] = result
+                    synchronized(thumbnailCache) {
+                        thumbnailCache[item.assetPath] = result
+                    }
                     withContext(Dispatchers.Main) {
                         if (holder.adapterPosition == position) {
                             holder.imageView.setImageBitmap(result)
@@ -221,7 +256,7 @@ class LutAdapter(
         preloadJob?.cancel()
         lutPreloadJob?.cancel()
         adapterScope.coroutineContext.cancelChildren()
-        thumbnailCache.clear()
-        // Keep LUT cache for faster re-use
+        synchronized(thumbnailCache) { thumbnailCache.clear() }
+        synchronized(lutCache) { lutCache.clear() }
     }
 }

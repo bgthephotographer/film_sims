@@ -1,51 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Base Dark Theme Colors -->
-    <color name="surface_dark">#FF0A0A0C</color>
-    <color name="surface_medium">#FF121215</color>
-    <color name="surface_light">#FF1A1A1F</color>
-    <color name="surface_elevated">#FF252528</color>
+    <!-- Base Dark Theme Colors - Deeper, more refined blacks -->
+    <color name="surface_dark">#FF050508</color>
+    <color name="surface_medium">#FF0C0C10</color>
+    <color name="surface_light">#FF151519</color>
+    <color name="surface_elevated">#FF1E1E24</color>
     
-    <!-- Glass Effect Colors -->
-    <color name="glass_bg">#E8151518</color>
-    <color name="glass_bg_light">#B31A1A1F</color>
-    <color name="glass_border">#26FFFFFF</color>
-    <color name="glass_border_light">#1AFFFFFF</color>
-    <color name="glass_highlight">#15FFFFFF</color>
+    <!-- Glass Effect Colors - More subtle transparency -->
+    <color name="glass_bg">#F0101014</color>
+    <color name="glass_bg_light">#B8161620</color>
+    <color name="glass_border">#20FFFFFF</color>
+    <color name="glass_border_light">#14FFFFFF</color>
+    <color name="glass_highlight">#10FFFFFF</color>
     
-    <!-- Accent Gradient Colors - Vintage Orange -->
-    <color name="accent_start">#FFFF6B35</color>
-    <color name="accent_end">#FFFFAB40</color>
-    <color name="accent_primary">#FFFF7043</color>
-    <color name="accent_dark">#FFE64A19</color>
-    <color name="accent_glow">#40FF6B35</color>
-    <color name="accent_glow_strong">#60FF6B35</color>
+    <!-- Accent Colors - Refined warm amber/gold palette -->
+    <color name="accent_start">#FFFF8A50</color>
+    <color name="accent_end">#FFFFC06A</color>
+    <color name="accent_primary">#FFFFAB60</color>
+    <color name="accent_dark">#FFE07830</color>
+    <color name="accent_glow">#35FF8A50</color>
+    <color name="accent_glow_strong">#50FF8A50</color>
     
-    <!-- Secondary Gradient Colors - Teal -->
-    <color name="secondary_start">#FF26A69A</color>
-    <color name="secondary_end">#FF4DB6AC</color>
-    <color name="accent_secondary">#FF26A69A</color>
+    <!-- Secondary Accent - Soft cyan for contrast -->
+    <color name="secondary_start">#FF40C4B0</color>
+    <color name="secondary_end">#FF60D4C4</color>
+    <color name="accent_secondary">#FF50D0B8</color>
     
-    <!-- Text Colors -->
-    <color name="text_primary">#FFFFFFFF</color>
-    <color name="text_secondary">#CCE0E0E0</color>
-    <color name="text_tertiary">#80AAAAAA</color>
-    <color name="text_disabled">#50FFFFFF</color>
+    <!-- Text Colors - Improved hierarchy -->
+    <color name="text_primary">#FFFAFAFA</color>
+    <color name="text_secondary">#D0D8D8D8</color>
+    <color name="text_tertiary">#70A0A0A8</color>
+    <color name="text_disabled">#40FFFFFF</color>
     
     <!-- Utility Colors -->
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     <color name="transparent">#00000000</color>
-    <color name="overlay_dark">#E6000000</color>
-    <color name="overlay_medium">#B3000000</color>
-    <color name="ripple_light">#20FFFFFF</color>
-    <color name="ripple_accent">#30FF6B35</color>
+    <color name="overlay_dark">#E8000000</color>
+    <color name="overlay_medium">#B8000000</color>
+    <color name="ripple_light">#18FFFFFF</color>
+    <color name="ripple_accent">#28FFAB60</color>
     
     <!-- Selection State Colors -->
-    <color name="chip_selected_bg">#FFFF7043</color>
-    <color name="chip_selected_text">#FF121212</color>
-    <color name="chip_unselected_bg">#33FFFFFF</color>
-    <color name="chip_unselected_text">#CCFFFFFF</color>
+    <color name="chip_selected_bg">#FFFFAB60</color>
+    <color name="chip_selected_text">#FF0C0C10</color>
+    <color name="chip_unselected_bg">#28FFFFFF</color>
+    <color name="chip_unselected_text">#D0FAFAFA</color>
     
     <!-- Legacy colors for compatibility -->
     <color name="purple_200">#FFBB86FC</color>

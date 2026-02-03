@@ -4,8 +4,8 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:paddingHorizontal="24dp"
-    android:paddingTop="28dp"
-    android:paddingBottom="24dp"
+    android:paddingTop="24dp"
+    android:paddingBottom="20dp"
     android:background="@drawable/bg_dialog_glass">
 
     <!-- Title -->
@@ -14,21 +14,22 @@
         android:layout_height="wrap_content"
         android:text="@string/title_settings"
         android:textColor="@color/text_primary"
-        android:textSize="24sp"
+        android:textSize="20sp"
         android:fontFamily="sans-serif-medium"
         android:gravity="center"
-        android:layout_marginBottom="28dp" />
+        android:layout_marginBottom="24dp" />
 
     <!-- Save Location Setting -->
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/label_save_folder"
-        android:textColor="@color/text_secondary"
-        android:textSize="13sp"
+        android:textColor="@color/text_tertiary"
+        android:textSize="11sp"
         android:fontFamily="sans-serif-medium"
-        android:letterSpacing="0.05"
-        android:layout_marginBottom="10dp"
+        android:letterSpacing="0.1"
+        android:textAllCaps="true"
+        android:layout_marginBottom="8dp"
         android:layout_marginStart="4dp" />
 
     <LinearLayout
@@ -37,9 +38,9 @@
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:background="@drawable/bg_input_outline"
-        android:paddingHorizontal="16dp"
-        android:paddingVertical="14dp"
-        android:layout_marginBottom="24dp">
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="12dp"
+        android:layout_marginBottom="20dp">
 
         <TextView
             android:id="@+id/tvSavePath"
@@ -48,7 +49,7 @@
             android:layout_weight="1"
             android:text="Pictures/FilmSims"
             android:textColor="@color/text_primary"
-            android:textSize="14sp"
+            android:textSize="13sp"
             android:singleLine="true"
             android:ellipsize="middle"
             android:gravity="start" />
@@ -59,10 +60,10 @@
             android:layout_height="wrap_content"
             android:text="@string/btn_change"
             android:textColor="@color/accent_primary"
-            android:textSize="13sp"
+            android:textSize="12sp"
             android:fontFamily="sans-serif-medium"
             android:background="@drawable/bg_text_link"
-            android:paddingHorizontal="12dp"
+            android:paddingHorizontal="10dp"
             android:paddingVertical="6dp"
             android:clickable="true"
             android:focusable="true" />
@@ -74,11 +75,12 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/label_quality"
-        android:textColor="@color/text_secondary"
-        android:textSize="13sp"
+        android:textColor="@color/text_tertiary"
+        android:textSize="11sp"
         android:fontFamily="sans-serif-medium"
-        android:letterSpacing="0.05"
-        android:layout_marginBottom="14dp"
+        android:letterSpacing="0.1"
+        android:textAllCaps="true"
+        android:layout_marginBottom="12dp"
         android:layout_marginStart="4dp" />
 
     <LinearLayout
@@ -87,7 +89,7 @@
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:paddingHorizontal="4dp"
-        android:layout_marginBottom="32dp">
+        android:layout_marginBottom="28dp">
 
         <SeekBar
             android:id="@+id/qualitySlider"
@@ -103,11 +105,11 @@
 
         <TextView
             android:id="@+id/tvQualityValue"
-            android:layout_width="48dp"
+            android:layout_width="44dp"
             android:layout_height="wrap_content"
             android:text="100%"
             android:textColor="@color/accent_primary"
-            android:textSize="14sp"
+            android:textSize="13sp"
             android:fontFamily="sans-serif-bold"
             android:gravity="end"
             android:layout_marginStart="12dp" />
@@ -118,10 +120,10 @@
     <Button
         android:id="@+id/btnCloseSettings"
         android:layout_width="match_parent"
-        android:layout_height="48dp"
+        android:layout_height="44dp"
         android:text="@string/btn_close"
         android:textColor="@color/text_primary"
-        android:textSize="14sp"
+        android:textSize="13sp"
         android:fontFamily="sans-serif-medium"
         android:background="@drawable/bg_button_secondary"
         android:stateListAnimator="@null" />
