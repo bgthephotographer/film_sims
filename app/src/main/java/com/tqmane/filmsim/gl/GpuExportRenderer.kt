@@ -28,9 +28,26 @@ class GpuExportRenderer(private val context: Context) {
     private var fboTextureId: Int = 0
     
     private val vertexBuffer: FloatBuffer
-    private var texCoordBuffer: FloatBuffer
+    private val texCoordBuffer: FloatBuffer
     
     private var isInitialized = false
+
+    // Cached handles
+    private var aPositionHandle: Int = -1
+    private var aTexCoordHandle: Int = -1
+    private var uScaleHandle: Int = -1
+    private var uZoomHandle: Int = -1
+    private var uOffsetHandle: Int = -1
+    private var uIntensityHandle: Int = -1
+    private var uGrainIntensityHandle: Int = -1
+    private var uGrainScaleHandle: Int = -1
+    private var uTimeHandle: Int = -1
+    private var uInputTextureHandle: Int = -1
+    private var uLutTextureHandle: Int = -1
+    private var uGrainTextureHandle: Int = -1
+
+    // Skip re-uploading the same LUT when exporting repeatedly
+    private var lastUploadedLut: CubeLUT? = null
     
     init {
         // Full screen quad (no aspect ratio correction for export)
@@ -73,6 +90,36 @@ class GpuExportRenderer(private val context: Context) {
         GLES30.glAttachShader(programId, vertexShader)
         GLES30.glAttachShader(programId, fragmentShader)
         GLES30.glLinkProgram(programId)
+
+        val linkStatus = IntArray(1)
+        GLES30.glGetProgramiv(programId, GLES30.GL_LINK_STATUS, linkStatus, 0)
+        if (linkStatus[0] == 0) {
+            val info = GLES30.glGetProgramInfoLog(programId)
+            android.util.Log.e("GpuExportRenderer", "Program link failed: $info")
+        }
+
+        GLES30.glDeleteShader(vertexShader)
+        GLES30.glDeleteShader(fragmentShader)
+
+        // Cache locations
+        aPositionHandle = GLES30.glGetAttribLocation(programId, "aPosition")
+        aTexCoordHandle = GLES30.glGetAttribLocation(programId, "aTexCoord")
+        uScaleHandle = GLES30.glGetUniformLocation(programId, "uScale")
+        uZoomHandle = GLES30.glGetUniformLocation(programId, "uZoom")
+        uOffsetHandle = GLES30.glGetUniformLocation(programId, "uOffset")
+        uIntensityHandle = GLES30.glGetUniformLocation(programId, "uIntensity")
+        uGrainIntensityHandle = GLES30.glGetUniformLocation(programId, "uGrainIntensity")
+        uGrainScaleHandle = GLES30.glGetUniformLocation(programId, "uGrainScale")
+        uTimeHandle = GLES30.glGetUniformLocation(programId, "uTime")
+        uInputTextureHandle = GLES30.glGetUniformLocation(programId, "uInputTexture")
+        uLutTextureHandle = GLES30.glGetUniformLocation(programId, "uLutTexture")
+        uGrainTextureHandle = GLES30.glGetUniformLocation(programId, "uGrainTexture")
+
+        // Bind sampler uniforms once
+        GLES30.glUseProgram(programId)
+        if (uInputTextureHandle >= 0) GLES30.glUniform1i(uInputTextureHandle, 0)
+        if (uLutTextureHandle >= 0) GLES30.glUniform1i(uLutTextureHandle, 1)
+        if (uGrainTextureHandle >= 0) GLES30.glUniform1i(uGrainTextureHandle, 2)
         
         // Generate textures
         val textures = IntArray(4)
@@ -140,15 +187,31 @@ class GpuExportRenderer(private val context: Context) {
         
         // Upload LUT if provided (once for all tiles)
         lut?.let {
-            GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, lutTextureId)
-            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR)
-            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR)
-            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE)
-            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE)
-            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_R, GLES30.GL_CLAMP_TO_EDGE)
-            // Use GL_RGB16F for MediaTek/Mali GPU compatibility
-            GLES30.glTexImage3D(GLES30.GL_TEXTURE_3D, 0, GLES30.GL_RGB16F, 
-                it.size, it.size, it.size, 0, GLES30.GL_RGB, GLES30.GL_FLOAT, it.data)
+            if (it !== lastUploadedLut) {
+                GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, lutTextureId)
+                GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR)
+                GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR)
+                GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE)
+                GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE)
+                GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_R, GLES30.GL_CLAMP_TO_EDGE)
+                // Use GL_RGB16F for MediaTek/Mali GPU compatibility
+                it.data.position(0)
+                GLES30.glTexImage3D(
+                    GLES30.GL_TEXTURE_3D,
+                    0,
+                    GLES30.GL_RGB16F,
+                    it.size,
+                    it.size,
+                    it.size,
+                    0,
+                    GLES30.GL_RGB,
+                    GLES30.GL_FLOAT,
+                    it.data
+                )
+                lastUploadedLut = it
+            }
+        } ?: run {
+            lastUploadedLut = null
         }
         
         // Determine if tiling is needed
@@ -208,7 +271,7 @@ class GpuExportRenderer(private val context: Context) {
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
         
         // Render with default tex coords (full image)
-        renderQuad(lut, intensity, grainEnabled, grainIntensity, grainScale, 0f, 0f, 1f, 1f)
+        renderQuad(lut, intensity, grainEnabled, grainIntensity, grainScale)
         
         // Read pixels from FBO
         val buffer = ByteBuffer.allocateDirect(width * height * 4)
@@ -300,7 +363,7 @@ class GpuExportRenderer(private val context: Context) {
                 GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
                 
                 // Render the tile (full texture coords since tile is already cropped)
-                renderQuad(lut, intensity, grainEnabled, grainIntensity, grainScale, 0f, 0f, 1f, 1f)
+                renderQuad(lut, intensity, grainEnabled, grainIntensity, grainScale)
                 
                 // Read tile pixels
                 val tileBuffer = ByteBuffer.allocateDirect(tileW * tileH * 4)
@@ -340,64 +403,43 @@ class GpuExportRenderer(private val context: Context) {
         intensity: Float,
         grainEnabled: Boolean,
         grainIntensity: Float,
-        grainScale: Float,
-        texU0: Float, texV0: Float, texU1: Float, texV1: Float
+        grainScale: Float
     ) {
-        // Update texture coordinates if needed
-        val texCoords = floatArrayOf(
-            texU0, texV0,
-            texU1, texV0,
-            texU0, texV1,
-            texU1, texV1
-        )
-        texCoordBuffer = ByteBuffer.allocateDirect(texCoords.size * 4)
-            .order(ByteOrder.nativeOrder()).asFloatBuffer().put(texCoords)
-        texCoordBuffer.position(0)
-        
         GLES30.glUseProgram(programId)
-        
-        val positionHandle = GLES30.glGetAttribLocation(programId, "aPosition")
-        GLES30.glEnableVertexAttribArray(positionHandle)
-        GLES30.glVertexAttribPointer(positionHandle, 2, GLES30.GL_FLOAT, false, 0, vertexBuffer)
-        
-        val texCoordHandle = GLES30.glGetAttribLocation(programId, "aTexCoord")
-        GLES30.glEnableVertexAttribArray(texCoordHandle)
-        GLES30.glVertexAttribPointer(texCoordHandle, 2, GLES30.GL_FLOAT, false, 0, texCoordBuffer)
+
+        GLES30.glEnableVertexAttribArray(aPositionHandle)
+        GLES30.glVertexAttribPointer(aPositionHandle, 2, GLES30.GL_FLOAT, false, 0, vertexBuffer)
+
+        GLES30.glEnableVertexAttribArray(aTexCoordHandle)
+        GLES30.glVertexAttribPointer(aTexCoordHandle, 2, GLES30.GL_FLOAT, false, 0, texCoordBuffer)
         
         // No aspect ratio correction for export (scaleX = scaleY = 1)
-        val scaleHandle = GLES30.glGetUniformLocation(programId, "uScale")
-        GLES30.glUniform2f(scaleHandle, 1f, 1f)
+        GLES30.glUniform2f(uScaleHandle, 1f, 1f)
         
         // Reset zoom and offset for full image export
-        val zoomHandle = GLES30.glGetUniformLocation(programId, "uZoom")
-        GLES30.glUniform1f(zoomHandle, 1.0f)
-        
-        val offsetHandle = GLES30.glGetUniformLocation(programId, "uOffset")
-        GLES30.glUniform2f(offsetHandle, 0f, 0f)
+        GLES30.glUniform1f(uZoomHandle, 1.0f)
+        GLES30.glUniform2f(uOffsetHandle, 0f, 0f)
         
         // Set uniforms
-        GLES30.glUniform1f(GLES30.glGetUniformLocation(programId, "uIntensity"), if (lut != null) intensity else 0f)
-        GLES30.glUniform1f(GLES30.glGetUniformLocation(programId, "uGrainIntensity"), if (grainEnabled) grainIntensity else 0f)
-        GLES30.glUniform1f(GLES30.glGetUniformLocation(programId, "uGrainScale"), grainScale)
-        GLES30.glUniform1f(GLES30.glGetUniformLocation(programId, "uTime"), 0f)
+        GLES30.glUniform1f(uIntensityHandle, if (lut != null) intensity else 0f)
+        GLES30.glUniform1f(uGrainIntensityHandle, if (grainEnabled) grainIntensity else 0f)
+        GLES30.glUniform1f(uGrainScaleHandle, grainScale)
+        GLES30.glUniform1f(uTimeHandle, 0f)
         
         // Bind textures
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, inputTextureId)
-        GLES30.glUniform1i(GLES30.glGetUniformLocation(programId, "uInputTexture"), 0)
         
         GLES30.glActiveTexture(GLES30.GL_TEXTURE1)
         GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, lutTextureId)
-        GLES30.glUniform1i(GLES30.glGetUniformLocation(programId, "uLutTexture"), 1)
         
         GLES30.glActiveTexture(GLES30.GL_TEXTURE2)
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, grainTextureId)
-        GLES30.glUniform1i(GLES30.glGetUniformLocation(programId, "uGrainTexture"), 2)
         
         GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
         
-        GLES30.glDisableVertexAttribArray(positionHandle)
-        GLES30.glDisableVertexAttribArray(texCoordHandle)
+        GLES30.glDisableVertexAttribArray(aPositionHandle)
+        GLES30.glDisableVertexAttribArray(aTexCoordHandle)
     }
     
     fun release() {
@@ -406,6 +448,7 @@ class GpuExportRenderer(private val context: Context) {
             GLES30.glDeleteFramebuffers(1, intArrayOf(fboId), 0)
             GLES30.glDeleteProgram(programId)
             isInitialized = false
+            lastUploadedLut = null
         }
     }
     
@@ -413,6 +456,12 @@ class GpuExportRenderer(private val context: Context) {
         val shader = GLES30.glCreateShader(type)
         GLES30.glShaderSource(shader, shaderCode)
         GLES30.glCompileShader(shader)
+        val compileStatus = IntArray(1)
+        GLES30.glGetShaderiv(shader, GLES30.GL_COMPILE_STATUS, compileStatus, 0)
+        if (compileStatus[0] == 0) {
+            val info = GLES30.glGetShaderInfoLog(shader)
+            android.util.Log.e("GpuExportRenderer", "Shader compile failed (type=$type): $info")
+        }
         return shader
     }
     

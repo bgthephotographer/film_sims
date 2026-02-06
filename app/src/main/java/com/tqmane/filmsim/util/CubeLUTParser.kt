@@ -3,6 +3,7 @@ package com.tqmane.filmsim.util
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.util.LruCache
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.nio.ByteBuffer
@@ -13,13 +14,39 @@ import kotlin.math.pow
 data class CubeLUT(val size: Int, val data: FloatBuffer)
 
 object CubeLUTParser {
+    // Cache parsed LUTs to avoid repeatedly parsing large files when user switches filters.
+    // Sized in KB; 16MB keeps several 64^3 LUTs without blowing memory.
+    private val lutCache = object : LruCache<String, CubeLUT>(16 * 1024) {
+        override fun sizeOf(key: String, value: CubeLUT): Int {
+            // Approximate native buffer bytes: size^3 * 3 * 4
+            val bytes = value.size * value.size * value.size * 3 * 4
+            return (bytes / 1024).coerceAtLeast(1)
+        }
+    }
+
     fun parse(context: Context, assetPath: String): CubeLUT? {
-        return when {
+        synchronized(lutCache) {
+            lutCache.get(assetPath)?.let { cached ->
+                cached.data.position(0)
+                return cached
+            }
+        }
+
+        val parsed = when {
             assetPath.endsWith(".png", ignoreCase = true) -> parsePngLut(context, assetPath)
             assetPath.endsWith(".cube", ignoreCase = true) -> parseCubeLut(context, assetPath)
             assetPath.endsWith(".bin", ignoreCase = true) -> parseBinLut(context, assetPath)
             else -> null
         }
+
+        if (parsed != null) {
+            parsed.data.position(0)
+            synchronized(lutCache) {
+                lutCache.put(assetPath, parsed)
+            }
+        }
+
+        return parsed
     }
     
     private fun parseBinLut(context: Context, assetPath: String): CubeLUT? {
@@ -335,52 +362,50 @@ object CubeLUTParser {
             
             android.util.Log.d("CubeLUTParser", "HALD: lutSize=$lutSize, tilesPerRow=$tilesPerRow, tileSize=${tileWidth}x${tileHeight}")
             
-            val dataList = mutableListOf<Float>()
-            
+            // Read pixels once (bitmap.getPixel() in triple nested loops is very slow)
+            val pixels = IntArray(width * height)
+            bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+            bitmap.recycle()
+
+            val entryCount = lutSize * lutSize * lutSize
+            val floatBuffer = ByteBuffer.allocateDirect(entryCount * 3 * 4)
+                .order(ByteOrder.nativeOrder())
+                .asFloatBuffer()
+
             // HALD LUT format: iterate B, then G, then R
-            // Each "tile" represents a slice of the blue channel
+            // Each tile represents a slice of the blue channel
             for (b in 0 until lutSize) {
-                // Calculate which tile contains this blue value
                 val tileX = b % tilesPerRow
                 val tileY = b / tilesPerRow
-                
+
                 for (g in 0 until lutSize) {
+                    val pixelY = tileY * tileHeight + g
+                    if (pixelY >= height) continue
+                    val rowOffset = pixelY * width
+                    val baseX = tileX * tileWidth
+
                     for (r in 0 until lutSize) {
-                        // Calculate pixel position within the tile
-                        val pixelX = tileX * tileWidth + r
-                        val pixelY = tileY * tileHeight + g
-                        
-                        if (pixelX >= width || pixelY >= height) {
-                            android.util.Log.e("CubeLUTParser", "Pixel out of bounds: ($pixelX, $pixelY)")
-                            continue
-                        }
-                        
-                        val pixel = bitmap.getPixel(pixelX, pixelY)
-                        dataList.add(android.graphics.Color.red(pixel) / 255f)
-                        dataList.add(android.graphics.Color.green(pixel) / 255f)
-                        dataList.add(android.graphics.Color.blue(pixel) / 255f)
+                        val pixelX = baseX + r
+                        if (pixelX >= width) continue
+
+                        val pixel = pixels[rowOffset + pixelX]
+                        val red = ((pixel ushr 16) and 0xFF) * 0.003921569f
+                        val green = ((pixel ushr 8) and 0xFF) * 0.003921569f
+                        val blue = (pixel and 0xFF) * 0.003921569f
+
+                        floatBuffer.put(red)
+                        floatBuffer.put(green)
+                        floatBuffer.put(blue)
                     }
                 }
             }
-            
-            bitmap.recycle()
-            
-            if (dataList.isEmpty()) {
-                android.util.Log.e("CubeLUTParser", "No data parsed from HALD LUT")
-                return null
-            }
-            
-            android.util.Log.d("CubeLUTParser", "Parsed ${dataList.size / 3} LUT entries (expected ${lutSize * lutSize * lutSize})")
-            
-            val floatBuffer = ByteBuffer.allocateDirect(dataList.size * 4)
-                .order(ByteOrder.nativeOrder())
-                .asFloatBuffer()
-            
-            for (f in dataList) {
-                floatBuffer.put(f)
-            }
+
             floatBuffer.position(0)
-            
+            android.util.Log.d(
+                "CubeLUTParser",
+                "Parsed ${entryCount} LUT entries (expected ${entryCount})"
+            )
+
             return CubeLUT(lutSize, floatBuffer)
             
         } catch (e: Exception) {

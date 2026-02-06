@@ -49,9 +49,10 @@ import com.tqmane.filmsim.util.CubeLUTParser
 import com.tqmane.filmsim.util.HighResLutProcessor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import android.content.Intent
 import com.tqmane.filmsim.util.UpdateChecker
@@ -70,6 +71,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var adjustmentToggle: ImageView
     
     private lateinit var prefs: SharedPreferences
+
+    private val activityJob = SupervisorJob()
+    private val activityScope = CoroutineScope(activityJob + Dispatchers.Main.immediate)
     
     private var hasSelectedLut = false
     private var savePath = "Pictures/FilmSims"
@@ -88,7 +92,6 @@ class MainActivity : ComponentActivity() {
     // Store original image data for full-resolution export
     private var originalImageUri: Uri? = null
     private var originalBitmap: Bitmap? = null
-    private var originalExifData: ByteArray? = null
     private var currentLutPath: String? = null
     private var currentIntensity: Float = 1f
     private var currentGrainEnabled: Boolean = false
@@ -113,30 +116,24 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun loadImage(uri: Uri) {
-        CoroutineScope(Dispatchers.IO).launch {
+        activityScope.launch(Dispatchers.IO) {
             try {
                 // Store original URI
                 originalImageUri = uri
-                
-                // Read EXIF data from original image
-                contentResolver.openInputStream(uri)?.use { inputStream ->
-                    val exif = ExifInterface(inputStream)
-                    // Store raw EXIF bytes for later
-                    originalExifData = extractExifBytes(uri)
-                }
-                
-                // Load full-resolution bitmap (kept for export)
-                val inputStream = contentResolver.openInputStream(uri)
-                val bitmap = BitmapFactory.decodeStream(inputStream)
-                inputStream?.close()
-                
-                if (bitmap != null) {
-                    originalBitmap = bitmap
-                    
-                    // Scale down for preview (max 10MP = ~3650x2740 for 4:3)
-                    val previewBitmap = scaleToMaxPixels(bitmap, 10_000_000)
-                    
-                    withContext(Dispatchers.Main) {
+
+                val (origW, origH) = decodeImageBounds(uri) ?: (0 to 0)
+
+                // Decode preview directly with sampling to reduce peak memory.
+                val previewBitmap = decodeSampledBitmap(uri, 10_000_000)
+                    ?: throw IllegalStateException("Failed to decode preview bitmap")
+
+                // Decode export bitmap (try full-res; if OOM, fall back to a large sampled bitmap)
+                val exportBitmap = decodeFullOrSampledBitmap(uri, fallbackMaxPixels = 30_000_000)
+                    ?: throw IllegalStateException("Failed to decode export bitmap")
+
+                originalBitmap = exportBitmap
+
+                withContext(Dispatchers.Main) {
                         // Hide placeholder
                         placeholderContainer.visibility = View.GONE
                         
@@ -151,7 +148,7 @@ class MainActivity : ComponentActivity() {
                         
                         // Thumbnails for LUT preview (500px)
                         val maxDim = 500
-                        val ratio = bitmap.width.toFloat() / bitmap.height.toFloat()
+                        val ratio = previewBitmap.width.toFloat() / previewBitmap.height.toFloat()
                         val thumbWidth: Int
                         val thumbHeight: Int
                         if (ratio > 1) {
@@ -161,29 +158,75 @@ class MainActivity : ComponentActivity() {
                             thumbHeight = maxDim
                             thumbWidth = (maxDim * ratio).toInt()
                         }
-                        val thumb = Bitmap.createScaledBitmap(bitmap, thumbWidth, thumbHeight, true)
+                        val thumb = Bitmap.createScaledBitmap(previewBitmap, thumbWidth, thumbHeight, true)
                         lutAdapter.setSourceBitmap(thumb)
                         
                         Toast.makeText(
                             this@MainActivity, 
-                            getString(R.string.image_loaded, "${bitmap.width}x${bitmap.height}", "${previewBitmap.width}x${previewBitmap.height}"), 
+                            getString(
+                                R.string.image_loaded,
+                                if (origW > 0 && origH > 0) "${origW}x${origH}" else "${exportBitmap.width}x${exportBitmap.height}",
+                                "${previewBitmap.width}x${previewBitmap.height}"
+                            ), 
                             Toast.LENGTH_SHORT
                         ).show()
-                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
                     Toast.makeText(this@MainActivity, getString(R.string.image_load_failed, e.message ?: ""), Toast.LENGTH_SHORT).show()
                 }
+            } catch (e: OutOfMemoryError) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, getString(R.string.image_load_failed, "Out of memory"), Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
-    
-    private fun extractExifBytes(uri: Uri): ByteArray? {
-        // EXIF data is small, no need to store full file bytes
-        // We'll read EXIF directly when saving
-        return null
+
+    private fun decodeImageBounds(uri: Uri): Pair<Int, Int>? {
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        contentResolver.openInputStream(uri)?.use { input ->
+            BitmapFactory.decodeStream(input, null, options)
+        }
+        if (options.outWidth <= 0 || options.outHeight <= 0) return null
+        return options.outWidth to options.outHeight
+    }
+
+    private fun decodeSampledBitmap(uri: Uri, maxPixels: Int): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        contentResolver.openInputStream(uri)?.use { input ->
+            BitmapFactory.decodeStream(input, null, bounds)
+        }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = calculateInSampleSize(bounds.outWidth, bounds.outHeight, maxPixels)
+        }
+        return contentResolver.openInputStream(uri)?.use { input ->
+            BitmapFactory.decodeStream(input, null, options)
+        }
+    }
+
+    private fun decodeFullOrSampledBitmap(uri: Uri, fallbackMaxPixels: Int): Bitmap? {
+        // First try full-res.
+        try {
+            contentResolver.openInputStream(uri)?.use { input ->
+                BitmapFactory.decodeStream(input)
+            }?.let { return it }
+        } catch (_: OutOfMemoryError) {
+            // Fall through to sampled decode.
+        }
+        return decodeSampledBitmap(uri, fallbackMaxPixels)
+    }
+
+    private fun calculateInSampleSize(width: Int, height: Int, maxPixels: Int): Int {
+        var inSampleSize = 1
+        while ((width / inSampleSize) * (height / inSampleSize) > maxPixels) {
+            inSampleSize *= 2
+        }
+        return inSampleSize.coerceAtLeast(1)
     }
     
     private fun scaleToMaxPixels(bitmap: Bitmap, maxPixels: Int): Bitmap {
@@ -208,6 +251,11 @@ class MainActivity : ComponentActivity() {
         prefs = getSharedPreferences("filmsim_settings", Context.MODE_PRIVATE)
         savePath = prefs.getString("save_path", "Pictures/FilmSims") ?: "Pictures/FilmSims"
         saveQuality = prefs.getInt("save_quality", 100)
+
+        // Restore last adjustment values
+        currentIntensity = prefs.getFloat("last_intensity", 1f).coerceIn(0f, 1f)
+        currentGrainEnabled = prefs.getBoolean("last_grain_enabled", false)
+        currentGrainIntensity = prefs.getFloat("last_grain_intensity", 0.5f).coerceIn(0f, 1f)
 
         setupWindowInsets()
         setupViews()
@@ -468,11 +516,16 @@ class MainActivity : ComponentActivity() {
         }
         
         // Setup intensity slider (single quick slider above presets)
+        // Initialize from persisted state BEFORE listener attaches
+        quickIntensitySlider.progress = (currentIntensity * 100f).toInt().coerceIn(0, 100)
+        quickIntensityValue.text = "${quickIntensitySlider.progress}%"
         quickIntensitySlider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 val intensity = progress / 100f
                 currentIntensity = intensity
                 quickIntensityValue.text = "${progress}%"
+
+                prefs.edit().putFloat("last_intensity", currentIntensity).apply()
                 
                 glSurfaceView.queueEvent {
                     renderer.setIntensity(intensity)
@@ -493,9 +546,17 @@ class MainActivity : ComponentActivity() {
         val accentColor = getColor(R.color.accent_primary)
         val disabledColor = getColor(R.color.text_tertiary)
         
+        // Initialize grain UI from persisted state
+        grainSlider.progress = (currentGrainIntensity * 100f).toInt().coerceIn(0, 100)
+        grainValue.text = "${grainSlider.progress}%"
+        grainToggle.isChecked = currentGrainEnabled
+        grainSlider.isEnabled = currentGrainEnabled
+
         grainToggle.setOnCheckedChangeListener { _, isChecked ->
             currentGrainEnabled = isChecked
             grainSlider.isEnabled = isChecked
+
+            prefs.edit().putBoolean("last_grain_enabled", currentGrainEnabled).apply()
             
             // Update colors based on state
             val color = if (isChecked) accentColor else disabledColor
@@ -517,6 +578,8 @@ class MainActivity : ComponentActivity() {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 grainValue.text = "${progress}%"
                 currentGrainIntensity = progress / 100f
+
+                prefs.edit().putFloat("last_grain_intensity", currentGrainIntensity).apply()
                 
                 if (grainToggle.isChecked) {
                     glSurfaceView.queueEvent {
@@ -806,6 +869,12 @@ class MainActivity : ComponentActivity() {
             if (!hasSelectedLut) {
                 hasSelectedLut = true
                 isAdjustmentPanelExpanded = true
+
+                // First LUT selection starts at 100%
+                quickIntensitySlider.progress = 100
+                quickIntensityValue.text = "100%"
+                currentIntensity = 1f
+                prefs.edit().putFloat("last_intensity", currentIntensity).apply()
                 
                 adjustmentHeader.visibility = View.VISIBLE
                 adjustmentHeader.alpha = 0f
@@ -823,12 +892,7 @@ class MainActivity : ComponentActivity() {
                     
                 adjustmentToggle.rotation = 0f
             }
-            
-            // Reset slider to 100%
-            quickIntensitySlider.progress = 100
-            quickIntensityValue.text = "100%"
-            currentIntensity = 1f
-            
+
         }
         lutListView.adapter = lutAdapter
         
@@ -851,7 +915,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun applyLut(assetPath: String) {
-        CoroutineScope(Dispatchers.IO).launch {
+        activityScope.launch(Dispatchers.IO) {
             val lut = CubeLUTParser.parse(this@MainActivity, assetPath)
             if (lut != null) {
                 glSurfaceView.queueEvent {
@@ -885,11 +949,13 @@ class MainActivity : ComponentActivity() {
         Toast.makeText(this, getString(R.string.exporting), Toast.LENGTH_SHORT).show()
         
         // Parse LUT first (can be done off main thread)
-        CoroutineScope(Dispatchers.IO).launch {
+        activityScope.launch(Dispatchers.IO) {
             try {
                 val lut = if (lutPath != null) {
                     CubeLUTParser.parse(this@MainActivity, lutPath)
                 } else null
+
+                val effectiveIntensity = if (lut != null) currentIntensity else 0f
                 
                 // Try GPU rendering first
                 val outputBitmapHolder = arrayOfNulls<Bitmap>(1)
@@ -904,7 +970,7 @@ class MainActivity : ComponentActivity() {
                         outputBitmapHolder[0] = gpuExportRenderer!!.renderHighRes(
                             sourceBitmap,
                             lut,
-                            currentIntensity,
+                            effectiveIntensity,
                             currentGrainEnabled,
                             currentGrainIntensity,
                             4.0f
@@ -932,7 +998,7 @@ class MainActivity : ComponentActivity() {
                     
                     // CPU fallback
                     outputBitmap = if (lut != null) {
-                        HighResLutProcessor.applyLut(sourceBitmap, lut, currentIntensity)
+                        HighResLutProcessor.applyLut(sourceBitmap, lut, effectiveIntensity)
                     } else {
                         // No LUT, use source directly (don't recycle source!)
                         shouldRecycleOutput = false
@@ -980,15 +1046,11 @@ class MainActivity : ComponentActivity() {
         }
 
         try {
-            // Write bitmap to a byte array first
-            val outputStream = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream)
-            val imageBytes = outputStream.toByteArray()
-            
-            // Write to file
+            // Write JPEG directly to destination to avoid large in-memory buffers
             resolver.openOutputStream(uri)?.use { stream ->
-                stream.write(imageBytes)
-            }
+                val ok = bitmap.compress(Bitmap.CompressFormat.JPEG, saveQuality, stream)
+                if (!ok) throw IllegalStateException("Bitmap compress failed")
+            } ?: throw IllegalStateException("Failed to open output stream")
             
             // Copy EXIF data from original image to new image
             originalImageUri?.let { sourceUri ->
@@ -1075,6 +1137,26 @@ class MainActivity : ComponentActivity() {
             e.printStackTrace()
             withContext(Dispatchers.Main) {
                 Toast.makeText(this@MainActivity, getString(R.string.save_error, e.message ?: ""), Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+
+        // Cancel any in-flight work tied to this Activity
+        activityScope.cancel()
+
+        // Stop adapter background work/caches
+        if (::lutAdapter.isInitialized) {
+            lutAdapter.clearCache()
+        }
+
+        // Release GPU export resources on GL thread
+        if (::glSurfaceView.isInitialized) {
+            glSurfaceView.queueEvent {
+                gpuExportRenderer?.release()
+                gpuExportRenderer = null
             }
         }
     }

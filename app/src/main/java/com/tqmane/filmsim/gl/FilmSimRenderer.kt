@@ -51,6 +51,20 @@ class FilmSimRenderer(private val context: Context) : GLSurfaceView.Renderer {
     
     private var hasImage: Boolean = false
 
+    // Cached attribute/uniform locations (glGet* in onDrawFrame is expensive)
+    private var aPositionHandle: Int = -1
+    private var aTexCoordHandle: Int = -1
+    private var uScaleHandle: Int = -1
+    private var uZoomHandle: Int = -1
+    private var uOffsetHandle: Int = -1
+    private var uIntensityHandle: Int = -1
+    private var uGrainIntensityHandle: Int = -1
+    private var uGrainScaleHandle: Int = -1
+    private var uTimeHandle: Int = -1
+    private var uInputTextureHandle: Int = -1
+    private var uLutTextureHandle: Int = -1
+    private var uGrainTextureHandle: Int = -1
+
     init {
         // Full screen quad
         val vertices = floatArrayOf(
@@ -126,6 +140,37 @@ class FilmSimRenderer(private val context: Context) : GLSurfaceView.Renderer {
         GLES30.glAttachShader(programId, vertexShader)
         GLES30.glAttachShader(programId, fragmentShader)
         GLES30.glLinkProgram(programId)
+
+        val linkStatus = IntArray(1)
+        GLES30.glGetProgramiv(programId, GLES30.GL_LINK_STATUS, linkStatus, 0)
+        if (linkStatus[0] == 0) {
+            val info = GLES30.glGetProgramInfoLog(programId)
+            android.util.Log.e("FilmSimRenderer", "Program link failed: $info")
+        }
+
+        // We can delete shaders after linking
+        GLES30.glDeleteShader(vertexShader)
+        GLES30.glDeleteShader(fragmentShader)
+
+        // Cache locations
+        aPositionHandle = GLES30.glGetAttribLocation(programId, "aPosition")
+        aTexCoordHandle = GLES30.glGetAttribLocation(programId, "aTexCoord")
+        uScaleHandle = GLES30.glGetUniformLocation(programId, "uScale")
+        uZoomHandle = GLES30.glGetUniformLocation(programId, "uZoom")
+        uOffsetHandle = GLES30.glGetUniformLocation(programId, "uOffset")
+        uIntensityHandle = GLES30.glGetUniformLocation(programId, "uIntensity")
+        uGrainIntensityHandle = GLES30.glGetUniformLocation(programId, "uGrainIntensity")
+        uGrainScaleHandle = GLES30.glGetUniformLocation(programId, "uGrainScale")
+        uTimeHandle = GLES30.glGetUniformLocation(programId, "uTime")
+        uInputTextureHandle = GLES30.glGetUniformLocation(programId, "uInputTexture")
+        uLutTextureHandle = GLES30.glGetUniformLocation(programId, "uLutTexture")
+        uGrainTextureHandle = GLES30.glGetUniformLocation(programId, "uGrainTexture")
+
+        // Bind sampler uniforms once
+        GLES30.glUseProgram(programId)
+        if (uInputTextureHandle >= 0) GLES30.glUniform1i(uInputTextureHandle, 0)
+        if (uLutTextureHandle >= 0) GLES30.glUniform1i(uLutTextureHandle, 1)
+        if (uGrainTextureHandle >= 0) GLES30.glUniform1i(uGrainTextureHandle, 2)
         
         // Generate textures (3 now: input, LUT, grain)
         val textures = IntArray(3)
@@ -206,14 +251,12 @@ class FilmSimRenderer(private val context: Context) : GLSurfaceView.Renderer {
 
         if (inputTextureId != 0 && hasImage) {
             GLES30.glUseProgram(programId)
-            
-            val positionHandle = GLES30.glGetAttribLocation(programId, "aPosition")
-            GLES30.glEnableVertexAttribArray(positionHandle)
-            GLES30.glVertexAttribPointer(positionHandle, 2, GLES30.GL_FLOAT, false, 0, vertexBuffer)
-            
-            val texCoordHandle = GLES30.glGetAttribLocation(programId, "aTexCoord")
-            GLES30.glEnableVertexAttribArray(texCoordHandle)
-            GLES30.glVertexAttribPointer(texCoordHandle, 2, GLES30.GL_FLOAT, false, 0, texCoordBuffer)
+
+            GLES30.glEnableVertexAttribArray(aPositionHandle)
+            GLES30.glVertexAttribPointer(aPositionHandle, 2, GLES30.GL_FLOAT, false, 0, vertexBuffer)
+
+            GLES30.glEnableVertexAttribArray(aTexCoordHandle)
+            GLES30.glVertexAttribPointer(aTexCoordHandle, 2, GLES30.GL_FLOAT, false, 0, texCoordBuffer)
             
             // Calculate Aspect Ratio Scale
             val imgRatio = imageWidth.toFloat() / imageHeight.toFloat()
@@ -228,47 +271,30 @@ class FilmSimRenderer(private val context: Context) : GLSurfaceView.Renderer {
                 scaleX = imgRatio / viewRatio
             }
             
-            val scaleHandle = GLES30.glGetUniformLocation(programId, "uScale")
-            GLES30.glUniform2f(scaleHandle, scaleX, scaleY)
+            GLES30.glUniform2f(uScaleHandle, scaleX, scaleY)
             
             // Set user transform (zoom & pan)
-            val zoomHandle = GLES30.glGetUniformLocation(programId, "uZoom")
-            GLES30.glUniform1f(zoomHandle, userZoom)
-            
-            val offsetHandle = GLES30.glGetUniformLocation(programId, "uOffset")
-            GLES30.glUniform2f(offsetHandle, userOffsetX, userOffsetY)
-            
-            // Set intensity uniform
-            val intensityHandle = GLES30.glGetUniformLocation(programId, "uIntensity")
-            GLES30.glUniform1f(intensityHandle, intensity)
-            
-            // Set grain uniforms
-            val grainIntensityHandle = GLES30.glGetUniformLocation(programId, "uGrainIntensity")
-            GLES30.glUniform1f(grainIntensityHandle, if (grainEnabled) grainIntensity else 0f)
-            
-            val grainScaleHandle = GLES30.glGetUniformLocation(programId, "uGrainScale")
-            GLES30.glUniform1f(grainScaleHandle, grainScale)
-            
-            val timeHandle = GLES30.glGetUniformLocation(programId, "uTime")
-            GLES30.glUniform1f(timeHandle, 0f) // Static grain for now
+            GLES30.glUniform1f(uZoomHandle, userZoom)
+            GLES30.glUniform2f(uOffsetHandle, userOffsetX, userOffsetY)
+            GLES30.glUniform1f(uIntensityHandle, intensity)
+            GLES30.glUniform1f(uGrainIntensityHandle, if (grainEnabled) grainIntensity else 0f)
+            GLES30.glUniform1f(uGrainScaleHandle, grainScale)
+            GLES30.glUniform1f(uTimeHandle, 0f) // Static grain for now
 
             // Bind textures
             GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
             GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, inputTextureId)
-            GLES30.glUniform1i(GLES30.glGetUniformLocation(programId, "uInputTexture"), 0)
             
             GLES30.glActiveTexture(GLES30.GL_TEXTURE1)
             GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, lutTextureId)
-            GLES30.glUniform1i(GLES30.glGetUniformLocation(programId, "uLutTexture"), 1)
             
             GLES30.glActiveTexture(GLES30.GL_TEXTURE2)
             GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, grainTextureId)
-            GLES30.glUniform1i(GLES30.glGetUniformLocation(programId, "uGrainTexture"), 2)
             
             GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
             
-            GLES30.glDisableVertexAttribArray(positionHandle)
-            GLES30.glDisableVertexAttribArray(texCoordHandle)
+            GLES30.glDisableVertexAttribArray(aPositionHandle)
+            GLES30.glDisableVertexAttribArray(aTexCoordHandle)
         }
     }
 
@@ -276,6 +302,12 @@ class FilmSimRenderer(private val context: Context) : GLSurfaceView.Renderer {
         val shader = GLES30.glCreateShader(type)
         GLES30.glShaderSource(shader, shaderCode)
         GLES30.glCompileShader(shader)
+        val compileStatus = IntArray(1)
+        GLES30.glGetShaderiv(shader, GLES30.GL_COMPILE_STATUS, compileStatus, 0)
+        if (compileStatus[0] == 0) {
+            val info = GLES30.glGetShaderInfoLog(shader)
+            android.util.Log.e("FilmSimRenderer", "Shader compile failed (type=$type): $info")
+        }
         return shader
     }
 
