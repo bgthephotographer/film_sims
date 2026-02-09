@@ -12,6 +12,14 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- Watermark Preview Overlay -->
+    <ImageView
+        android:id="@+id/watermarkPreview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitCenter"
+        android:visibility="gone" />
+
     <!-- Main Container -->
     <LinearLayout
         android:layout_width="match_parent"
@@ -384,11 +392,314 @@
 
                 </LinearLayout>
 
+                <!-- Divider between grain and watermark -->
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
                     android:background="#15FFFFFF"
                     android:layout_marginVertical="8dp" />
+
+                <!-- Watermark Section (inside collapsible panel) -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/header_watermark"
+                    android:textColor="@color/accent_primary"
+                    android:textSize="10sp"
+                    android:letterSpacing="0.15"
+                    android:textAllCaps="true"
+                    android:fontFamily="sans-serif-medium"
+                    android:layout_marginBottom="4dp" />
+
+                <!-- Watermark Style Chips -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingVertical="4dp">
+
+                    <ImageView
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
+                        android:src="@drawable/ic_watermark"
+                        app:tint="@color/accent_secondary"
+                        android:layout_marginEnd="12dp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/label_watermark_style"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp"
+                        android:fontFamily="sans-serif"
+                        android:layout_marginEnd="12dp" />
+
+                    <com.google.android.material.chip.ChipGroup
+                        android:id="@+id/watermarkStyleChipGroup"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        app:singleSelection="true"
+                        app:selectionRequired="true"
+                        app:chipSpacingHorizontal="6dp">
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipWatermarkNone"
+                            style="@style/Widget.Material3.Chip.Filter"
+                            android:layout_width="wrap_content"
+                            android:layout_height="32dp"
+                            android:text="@string/watermark_none"
+                            android:textColor="@color/simple_chip_text"
+                            android:textSize="12sp"
+                            android:fontFamily="sans-serif-medium"
+                            android:letterSpacing="0.01"
+                            app:chipBackgroundColor="@color/chip_glow_bg"
+                            app:chipStrokeWidth="1.5dp"
+                            app:chipStrokeColor="@color/chip_glow_stroke"
+                            app:chipCornerRadius="16dp"
+                            app:chipMinHeight="32dp"
+                            app:chipStartPadding="12dp"
+                            app:chipEndPadding="12dp"
+                            app:textStartPadding="0dp"
+                            app:textEndPadding="0dp"
+                            app:ensureMinTouchTargetSize="false"
+                            app:checkedIconVisible="false" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipWatermarkFrame"
+                            style="@style/Widget.Material3.Chip.Filter"
+                            android:layout_width="wrap_content"
+                            android:layout_height="32dp"
+                            android:text="@string/watermark_frame"
+                            android:textColor="@color/simple_chip_text"
+                            android:textSize="12sp"
+                            android:fontFamily="sans-serif-medium"
+                            android:letterSpacing="0.01"
+                            app:chipBackgroundColor="@color/chip_glow_bg"
+                            app:chipStrokeWidth="1.5dp"
+                            app:chipStrokeColor="@color/chip_glow_stroke"
+                            app:chipCornerRadius="16dp"
+                            app:chipMinHeight="32dp"
+                            app:chipStartPadding="12dp"
+                            app:chipEndPadding="12dp"
+                            app:textStartPadding="0dp"
+                            app:textEndPadding="0dp"
+                            app:ensureMinTouchTargetSize="false"
+                            app:checkedIconVisible="false" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipWatermarkText"
+                            style="@style/Widget.Material3.Chip.Filter"
+                            android:layout_width="wrap_content"
+                            android:layout_height="32dp"
+                            android:text="@string/watermark_text"
+                            android:textColor="@color/simple_chip_text"
+                            android:textSize="12sp"
+                            android:fontFamily="sans-serif-medium"
+                            android:letterSpacing="0.01"
+                            app:chipBackgroundColor="@color/chip_glow_bg"
+                            app:chipStrokeWidth="1.5dp"
+                            app:chipStrokeColor="@color/chip_glow_stroke"
+                            app:chipCornerRadius="16dp"
+                            app:chipMinHeight="32dp"
+                            app:chipStartPadding="12dp"
+                            app:chipEndPadding="12dp"
+                            app:textStartPadding="0dp"
+                            app:textEndPadding="0dp"
+                            app:ensureMinTouchTargetSize="false"
+                            app:checkedIconVisible="false" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipWatermarkFrameYG"
+                            style="@style/Widget.Material3.Chip.Filter"
+                            android:layout_width="wrap_content"
+                            android:layout_height="32dp"
+                            android:text="@string/watermark_frame_yg"
+                            android:textColor="@color/simple_chip_text"
+                            android:textSize="12sp"
+                            android:fontFamily="sans-serif-medium"
+                            android:letterSpacing="0.01"
+                            app:chipBackgroundColor="@color/chip_glow_bg"
+                            app:chipStrokeWidth="1.5dp"
+                            app:chipStrokeColor="@color/chip_glow_stroke"
+                            app:chipCornerRadius="16dp"
+                            app:chipMinHeight="32dp"
+                            app:chipStartPadding="12dp"
+                            app:chipEndPadding="12dp"
+                            app:textStartPadding="0dp"
+                            app:textEndPadding="0dp"
+                            app:ensureMinTouchTargetSize="false"
+                            app:checkedIconVisible="false" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipWatermarkTextYG"
+                            style="@style/Widget.Material3.Chip.Filter"
+                            android:layout_width="wrap_content"
+                            android:layout_height="32dp"
+                            android:text="@string/watermark_text_yg"
+                            android:textColor="@color/simple_chip_text"
+                            android:textSize="12sp"
+                            android:fontFamily="sans-serif-medium"
+                            android:letterSpacing="0.01"
+                            app:chipBackgroundColor="@color/chip_glow_bg"
+                            app:chipStrokeWidth="1.5dp"
+                            app:chipStrokeColor="@color/chip_glow_stroke"
+                            app:chipCornerRadius="16dp"
+                            app:chipMinHeight="32dp"
+                            app:chipStartPadding="12dp"
+                            app:chipEndPadding="12dp"
+                            app:textStartPadding="0dp"
+                            app:textEndPadding="0dp"
+                            app:ensureMinTouchTargetSize="false"
+                            app:checkedIconVisible="false" />
+
+                    </com.google.android.material.chip.ChipGroup>
+
+                </LinearLayout>
+
+                <!-- Watermark Text Input (Device Name) -->
+                <LinearLayout
+                    android:id="@+id/watermarkDeviceContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingVertical="4dp"
+                    android:paddingStart="30dp"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="56dp"
+                        android:layout_height="wrap_content"
+                        android:text="@string/label_watermark_device"
+                        android:textColor="@color/text_tertiary"
+                        android:textSize="12sp"
+                        android:fontFamily="sans-serif"
+                        android:layout_marginEnd="8dp" />
+
+                    <EditText
+                        android:id="@+id/watermarkDeviceInput"
+                        android:layout_width="0dp"
+                        android:layout_height="34dp"
+                        android:layout_weight="1"
+                        android:background="@drawable/bg_input_outline"
+                        android:textColor="@color/text_primary"
+                        android:textSize="11sp"
+                        android:paddingHorizontal="10dp"
+                        android:inputType="text"
+                        android:maxLines="1"
+                        android:singleLine="true"
+                        android:fontFamily="sans-serif" />
+
+                </LinearLayout>
+
+                <!-- Watermark Text Input (Lens Info) -->
+                <LinearLayout
+                    android:id="@+id/watermarkLensContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingVertical="4dp"
+                    android:paddingStart="30dp"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="56dp"
+                        android:layout_height="wrap_content"
+                        android:text="@string/label_watermark_lens"
+                        android:textColor="@color/text_tertiary"
+                        android:textSize="12sp"
+                        android:fontFamily="sans-serif"
+                        android:layout_marginEnd="8dp" />
+
+                    <EditText
+                        android:id="@+id/watermarkLensInput"
+                        android:layout_width="0dp"
+                        android:layout_height="34dp"
+                        android:layout_weight="1"
+                        android:background="@drawable/bg_input_outline"
+                        android:textColor="@color/text_primary"
+                        android:textSize="11sp"
+                        android:paddingHorizontal="10dp"
+                        android:inputType="text"
+                        android:maxLines="1"
+                        android:singleLine="true"
+                        android:fontFamily="sans-serif" />
+
+                </LinearLayout>
+
+                <!-- Watermark Text Input (Time) -->
+                <LinearLayout
+                    android:id="@+id/watermarkTimeContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingVertical="4dp"
+                    android:paddingStart="30dp"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="56dp"
+                        android:layout_height="wrap_content"
+                        android:text="@string/label_watermark_time"
+                        android:textColor="@color/text_tertiary"
+                        android:textSize="12sp"
+                        android:fontFamily="sans-serif"
+                        android:layout_marginEnd="8dp" />
+
+                    <EditText
+                        android:id="@+id/watermarkTimeInput"
+                        android:layout_width="0dp"
+                        android:layout_height="34dp"
+                        android:layout_weight="1"
+                        android:background="@drawable/bg_input_outline"
+                        android:textColor="@color/text_primary"
+                        android:textSize="11sp"
+                        android:paddingHorizontal="10dp"
+                        android:inputType="text"
+                        android:maxLines="1"
+                        android:singleLine="true"
+                        android:fontFamily="sans-serif" />
+
+                </LinearLayout>
+
+                <!-- Watermark Text Input (Location) -->
+                <LinearLayout
+                    android:id="@+id/watermarkLocationContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingVertical="4dp"
+                    android:paddingStart="30dp"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="56dp"
+                        android:layout_height="wrap_content"
+                        android:text="@string/label_watermark_location"
+                        android:textColor="@color/text_tertiary"
+                        android:textSize="12sp"
+                        android:fontFamily="sans-serif"
+                        android:layout_marginEnd="8dp" />
+
+                    <EditText
+                        android:id="@+id/watermarkLocationInput"
+                        android:layout_width="0dp"
+                        android:layout_height="34dp"
+                        android:layout_weight="1"
+                        android:background="@drawable/bg_input_outline"
+                        android:textColor="@color/text_primary"
+                        android:textSize="11sp"
+                        android:paddingHorizontal="10dp"
+                        android:inputType="text"
+                        android:maxLines="1"
+                        android:singleLine="true"
+                        android:fontFamily="sans-serif" />
+
+                </LinearLayout>
 
             </LinearLayout>
 

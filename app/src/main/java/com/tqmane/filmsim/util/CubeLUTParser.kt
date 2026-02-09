@@ -32,10 +32,20 @@ object CubeLUTParser {
             }
         }
 
+        val fileName = assetPath.substringAfterLast('/')
+        val hasExtension = fileName.contains('.')
+
         val parsed = when {
             assetPath.endsWith(".png", ignoreCase = true) -> parsePngLut(context, assetPath)
+            assetPath.endsWith(".webp", ignoreCase = true) -> parsePngLut(context, assetPath)
+            assetPath.endsWith(".jpg", ignoreCase = true) -> parsePngLut(context, assetPath)
+            assetPath.endsWith(".jpeg", ignoreCase = true) -> parsePngLut(context, assetPath)
             assetPath.endsWith(".cube", ignoreCase = true) -> parseCubeLut(context, assetPath)
             assetPath.endsWith(".bin", ignoreCase = true) -> parseBinLut(context, assetPath)
+            // Some vendors ship binary LUTs without an extension (e.g. OnePlus/Uncategorized/default, ODT_Photo).
+            !hasExtension -> parseBinLut(context, assetPath)
+            // Keep this off the LUT listing (repository doesn't include .dat), but allow parsing if referenced.
+            assetPath.endsWith(".dat", ignoreCase = true) -> parseBinLut(context, assetPath)
             else -> null
         }
 
@@ -333,9 +343,14 @@ object CubeLUTParser {
                 return parse1DLut(bitmap)
             }
             
-            // Strip format: width = lutSize², height = lutSize (e.g. 1024x32, 256x16)
+            // Horizontal strip format: width = lutSize², height = lutSize (e.g. 1024x32, 256x16)
             if (width > height && height > 0 && width == height * height) {
                 return parseStripLut(bitmap, height)
+            }
+            
+            // Vertical strip format: height = width × width (e.g. 33x1089 for Meizu filterManager)
+            if (height > width && width > 0 && height == width * width) {
+                return parseVerticalStripLut(bitmap, width)
             }
             
             // 512x512 = 64³ in 8x8 grid of 64x64 slices (HALD format)
@@ -441,19 +456,21 @@ object CubeLUTParser {
                 .asFloatBuffer()
             
             // Strip format: lutSize tiles laid out horizontally, each tile is lutSize x lutSize
+            // Meizu convention: Tile = Green, X within tile = Blue, Y (row) = Red
+            // OpenGL 3D texture expects data in order: R (fastest), G, B (slowest)
             for (b in 0 until lutSize) {
-                val baseX = b * lutSize
                 for (g in 0 until lutSize) {
-                    val rowOffset = g * width
                     for (r in 0 until lutSize) {
-                        val pixelX = baseX + r
-                        if (pixelX >= width || g >= height) {
+                        // Tile index = Green axis, offset within tile = Blue axis, row = Red axis
+                        val pixelX = g * lutSize + b
+                        val pixelY = r
+                        if (pixelX >= width || pixelY >= height) {
                             floatBuffer.put(0f)
                             floatBuffer.put(0f)
                             floatBuffer.put(0f)
                             continue
                         }
-                        val pixel = pixels[rowOffset + pixelX]
+                        val pixel = pixels[pixelY * width + pixelX]
                         val red = ((pixel ushr 16) and 0xFF) * 0.003921569f
                         val green = ((pixel ushr 8) and 0xFF) * 0.003921569f
                         val blue = (pixel and 0xFF) * 0.003921569f
@@ -470,6 +487,62 @@ object CubeLUTParser {
             
         } catch (e: Exception) {
             android.util.Log.e("CubeLUTParser", "Error parsing strip LUT", e)
+            return null
+        }
+    }
+
+    /**
+     * Parse vertical strip LUT format (e.g. Meizu filterManager: 33x1089)
+     * Tiles are laid out vertically: each tile is lutSize x lutSize, stacked vertically
+     */
+    private fun parseVerticalStripLut(bitmap: Bitmap, lutSize: Int): CubeLUT? {
+        try {
+            val width = bitmap.width
+            val height = bitmap.height
+            
+            android.util.Log.d("CubeLUTParser", "Vertical Strip LUT: lutSize=$lutSize, image=${width}x${height}")
+            
+            val pixels = IntArray(width * height)
+            bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+            bitmap.recycle()
+            
+            val entryCount = lutSize * lutSize * lutSize
+            val floatBuffer = ByteBuffer.allocateDirect(entryCount * 3 * 4)
+                .order(ByteOrder.nativeOrder())
+                .asFloatBuffer()
+            
+            // Vertical strip format: lutSize tiles laid out vertically, each tile is lutSize x lutSize
+            for (b in 0 until lutSize) {
+                val baseY = b * lutSize
+                for (g in 0 until lutSize) {
+                    val pixelY = baseY + g
+                    if (pixelY >= height) continue
+                    val rowOffset = pixelY * width
+                    
+                    for (r in 0 until lutSize) {
+                        if (r >= width) {
+                            floatBuffer.put(0f)
+                            floatBuffer.put(0f)
+                            floatBuffer.put(0f)
+                            continue
+                        }
+                        val pixel = pixels[rowOffset + r]
+                        val red = ((pixel ushr 16) and 0xFF) * 0.003921569f
+                        val green = ((pixel ushr 8) and 0xFF) * 0.003921569f
+                        val blue = (pixel and 0xFF) * 0.003921569f
+                        floatBuffer.put(red)
+                        floatBuffer.put(green)
+                        floatBuffer.put(blue)
+                    }
+                }
+            }
+            
+            floatBuffer.position(0)
+            android.util.Log.d("CubeLUTParser", "Parsed vertical strip LUT: $entryCount entries")
+            return CubeLUT(lutSize, floatBuffer)
+            
+        } catch (e: Exception) {
+            android.util.Log.e("CubeLUTParser", "Error parsing vertical strip LUT", e)
             return null
         }
     }
