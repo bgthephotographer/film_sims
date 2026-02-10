@@ -748,10 +748,63 @@ class MainActivity : ComponentActivity() {
         watermarkDeviceInput.addTextChangedListener(watermarkTextWatcher)
         watermarkLensInput.addTextChangedListener(watermarkTextWatcher)
         
+        // Brand → Style chip mapping
+        val honorChipIds = listOf(R.id.chipWatermarkFrame, R.id.chipWatermarkText, R.id.chipWatermarkFrameYG, R.id.chipWatermarkTextYG)
+        val meizuChipIds = listOf(R.id.chipMeizuNorm, R.id.chipMeizuPro, R.id.chipMeizuZ1, R.id.chipMeizuZ2,
+            R.id.chipMeizuZ3, R.id.chipMeizuZ4, R.id.chipMeizuZ5, R.id.chipMeizuZ6, R.id.chipMeizuZ7)
+        val vivoChipIds = listOf(R.id.chipVivoZeiss, R.id.chipVivoClassic, R.id.chipVivoPro, R.id.chipVivoIqoo)
+        val allStyleChipIds = honorChipIds + meizuChipIds + vivoChipIds
+
+        val watermarkStyleRow = findViewById<LinearLayout>(R.id.watermarkStyleRow)
         val watermarkStyleChipGroup = findViewById<com.google.android.material.chip.ChipGroup>(R.id.watermarkStyleChipGroup)
-        val chipWatermarkNone = findViewById<com.google.android.material.chip.Chip>(R.id.chipWatermarkNone)
-        chipWatermarkNone.isChecked = true
+        val watermarkBrandChipGroup = findViewById<com.google.android.material.chip.ChipGroup>(R.id.watermarkBrandChipGroup)
         
+        // Initially select "None" brand
+        findViewById<com.google.android.material.chip.Chip>(R.id.chipBrandNone).isChecked = true
+
+        // Helper: show only chips belonging to a brand
+        fun showBrandChips(chipIds: List<Int>) {
+            for (id in allStyleChipIds) {
+                findViewById<com.google.android.material.chip.Chip>(id).visibility =
+                    if (id in chipIds) View.VISIBLE else View.GONE
+            }
+            // Auto-select the first visible chip
+            watermarkStyleChipGroup.clearCheck()
+            if (chipIds.isNotEmpty()) {
+                findViewById<com.google.android.material.chip.Chip>(chipIds[0]).isChecked = true
+            }
+        }
+
+        // Brand chip listener
+        watermarkBrandChipGroup.setOnCheckedStateChangeListener { _, checkedIds ->
+            if (checkedIds.isNotEmpty()) {
+                when (checkedIds[0]) {
+                    R.id.chipBrandNone -> {
+                        watermarkStyleRow.visibility = View.GONE
+                        currentWatermarkStyle = WatermarkProcessor.WatermarkStyle.NONE
+                        watermarkDeviceContainer.visibility = View.GONE
+                        watermarkTimeContainer.visibility = View.GONE
+                        watermarkLocationContainer.visibility = View.GONE
+                        watermarkLensContainer.visibility = View.GONE
+                        updateWatermarkPreview()
+                    }
+                    R.id.chipBrandHonor -> {
+                        watermarkStyleRow.visibility = View.VISIBLE
+                        showBrandChips(honorChipIds)
+                    }
+                    R.id.chipBrandMeizu -> {
+                        watermarkStyleRow.visibility = View.VISIBLE
+                        showBrandChips(meizuChipIds)
+                    }
+                    R.id.chipBrandVivo -> {
+                        watermarkStyleRow.visibility = View.VISIBLE
+                        showBrandChips(vivoChipIds)
+                    }
+                }
+            }
+        }
+
+        // Style chip listener
         watermarkStyleChipGroup.setOnCheckedStateChangeListener { _, checkedIds ->
             if (checkedIds.isNotEmpty()) {
                 currentWatermarkStyle = when (checkedIds[0]) {
@@ -759,16 +812,31 @@ class MainActivity : ComponentActivity() {
                     R.id.chipWatermarkText -> WatermarkProcessor.WatermarkStyle.TEXT
                     R.id.chipWatermarkFrameYG -> WatermarkProcessor.WatermarkStyle.FRAME_YG
                     R.id.chipWatermarkTextYG -> WatermarkProcessor.WatermarkStyle.TEXT_YG
+                    R.id.chipMeizuNorm -> WatermarkProcessor.WatermarkStyle.MEIZU_NORM
+                    R.id.chipMeizuPro -> WatermarkProcessor.WatermarkStyle.MEIZU_PRO
+                    R.id.chipMeizuZ1 -> WatermarkProcessor.WatermarkStyle.MEIZU_Z1
+                    R.id.chipMeizuZ2 -> WatermarkProcessor.WatermarkStyle.MEIZU_Z2
+                    R.id.chipMeizuZ3 -> WatermarkProcessor.WatermarkStyle.MEIZU_Z3
+                    R.id.chipMeizuZ4 -> WatermarkProcessor.WatermarkStyle.MEIZU_Z4
+                    R.id.chipMeizuZ5 -> WatermarkProcessor.WatermarkStyle.MEIZU_Z5
+                    R.id.chipMeizuZ6 -> WatermarkProcessor.WatermarkStyle.MEIZU_Z6
+                    R.id.chipMeizuZ7 -> WatermarkProcessor.WatermarkStyle.MEIZU_Z7
+                    R.id.chipVivoZeiss -> WatermarkProcessor.WatermarkStyle.VIVO_ZEISS
+                    R.id.chipVivoClassic -> WatermarkProcessor.WatermarkStyle.VIVO_CLASSIC
+                    R.id.chipVivoPro -> WatermarkProcessor.WatermarkStyle.VIVO_PRO
+                    R.id.chipVivoIqoo -> WatermarkProcessor.WatermarkStyle.VIVO_IQOO
                     else -> WatermarkProcessor.WatermarkStyle.NONE
                 }
                 val isYG = currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.FRAME_YG ||
                            currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.TEXT_YG
                 val showInputs = currentWatermarkStyle != WatermarkProcessor.WatermarkStyle.NONE
-                // YG variants only show device name (no lens/time/location)
-                watermarkDeviceContainer.visibility = if (showInputs) View.VISIBLE else View.GONE
+                val noDevice = currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.MEIZU_Z6 ||
+                               currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.MEIZU_Z7
+                val isVivoClassic = currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.VIVO_CLASSIC
+                watermarkDeviceContainer.visibility = if (showInputs && !noDevice) View.VISIBLE else View.GONE
+                watermarkLensContainer.visibility = if (showInputs && !isYG && !isVivoClassic) View.VISIBLE else View.GONE
                 watermarkTimeContainer.visibility = if (showInputs && !isYG) View.VISIBLE else View.GONE
                 watermarkLocationContainer.visibility = if (showInputs && !isYG) View.VISIBLE else View.GONE
-                watermarkLensContainer.visibility = if (showInputs && !isYG) View.VISIBLE else View.GONE
                 updateWatermarkPreview()
             }
         }

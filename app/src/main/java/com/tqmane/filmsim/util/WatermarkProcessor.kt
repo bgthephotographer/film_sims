@@ -25,7 +25,10 @@ import java.util.Locale
 object WatermarkProcessor {
 
     enum class WatermarkStyle {
-        NONE, FRAME, TEXT, FRAME_YG, TEXT_YG
+        NONE, FRAME, TEXT, FRAME_YG, TEXT_YG,
+        MEIZU_NORM, MEIZU_PRO,
+        MEIZU_Z1, MEIZU_Z2, MEIZU_Z3, MEIZU_Z4, MEIZU_Z5, MEIZU_Z6, MEIZU_Z7,
+        VIVO_ZEISS, VIVO_CLASSIC, VIVO_PRO, VIVO_IQOO
     }
 
     data class WatermarkConfig(
@@ -89,6 +92,19 @@ object WatermarkProcessor {
             WatermarkStyle.TEXT -> applyTextWatermark(context, source, config)
             WatermarkStyle.FRAME_YG -> applyFrameWatermarkYG(context, source, config)
             WatermarkStyle.TEXT_YG -> applyTextWatermarkYG(context, source, config)
+            WatermarkStyle.MEIZU_NORM -> applyMeizuNorm(context, source, config)
+            WatermarkStyle.MEIZU_PRO -> applyMeizuPro(context, source, config)
+            WatermarkStyle.MEIZU_Z1 -> applyMeizuZ1(context, source, config)
+            WatermarkStyle.MEIZU_Z2 -> applyMeizuZ2(context, source, config)
+            WatermarkStyle.MEIZU_Z3 -> applyMeizuZ3(context, source, config)
+            WatermarkStyle.MEIZU_Z4 -> applyMeizuZ4(context, source, config)
+            WatermarkStyle.MEIZU_Z5 -> applyMeizuZ5(context, source, config)
+            WatermarkStyle.MEIZU_Z6 -> applyMeizuZ6(context, source, config)
+            WatermarkStyle.MEIZU_Z7 -> applyMeizuZ7(context, source, config)
+            WatermarkStyle.VIVO_ZEISS -> applyVivoZeiss(context, source, config)
+            WatermarkStyle.VIVO_CLASSIC -> applyVivoClassic(context, source, config)
+            WatermarkStyle.VIVO_PRO -> applyVivoPro(context, source, config)
+            WatermarkStyle.VIVO_IQOO -> applyVivoIqoo(context, source, config)
         }
     }
 
@@ -633,6 +649,1185 @@ object WatermarkProcessor {
             )
             canvas.drawBitmap(yg, null, logoRect, Paint(Paint.FILTER_BITMAP_FLAG))
             yg.recycle()
+        }
+
+        return result
+    }
+
+    // ==================== Meizu Watermarks ====================
+
+    // Cached Meizu typefaces
+    private var meizuDeviceTypeface: Typeface? = null  // MEIZUCamera-Medium (typeface="-1")
+    private var meizuTextMedium: Typeface? = null       // TT Fors Medium
+    private var meizuTextRegular: Typeface? = null      // TT Fors Regular
+
+    private fun getMeizuDeviceTypeface(context: Context): Typeface {
+        meizuDeviceTypeface?.let { return it }
+        return try {
+            Typeface.createFromAsset(context.assets, "watermark/Meizu/fonts/MEIZUCamera-Medium.otf").also {
+                meizuDeviceTypeface = it
+            }
+        } catch (_: Exception) {
+            Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        }
+    }
+
+    private fun getMeizuTextMedium(context: Context): Typeface {
+        meizuTextMedium?.let { return it }
+        return try {
+            Typeface.createFromAsset(context.assets, "watermark/Meizu/fonts/TTForsMedium.ttf").also {
+                meizuTextMedium = it
+            }
+        } catch (_: Exception) {
+            Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        }
+    }
+
+    private fun getMeizuTextRegular(context: Context): Typeface {
+        meizuTextRegular?.let { return it }
+        return try {
+            Typeface.createFromAsset(context.assets, "watermark/Meizu/fonts/TTForsRegular.ttf").also {
+                meizuTextRegular = it
+            }
+        } catch (_: Exception) {
+            Typeface.create("sans-serif", Typeface.NORMAL)
+        }
+    }
+
+    private fun loadMeizuLogo(context: Context, name: String): Bitmap? {
+        return try {
+            context.assets.open("watermark/Meizu/logos/$name").use { stream ->
+                BitmapFactory.decodeStream(stream)
+            }
+        } catch (_: Exception) { null }
+    }
+
+    /** Meizu brand accent: small filled red circle. */
+    private fun drawMeizuRedDot(canvas: Canvas, cx: Float, cy: Float, s: Float) {
+        val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(255, 65, 50)
+            style = Paint.Style.FILL
+        }
+        canvas.drawCircle(cx, cy, 8f * s, dotPaint)
+    }
+
+    /**
+     * Split lens info into discrete parts for separator-style rendering.
+     * Splits by double-space or explicit "|" delimiter in user input.
+     */
+    private fun splitDiscreteParts(lensInfo: String?): List<String> {
+        if (lensInfo.isNullOrBlank()) return emptyList()
+        // If user already included "|", split by that
+        if ("|" in lensInfo) return lensInfo.split("|").map { it.trim() }.filter { it.isNotEmpty() }
+        // Otherwise split by 2+ spaces
+        return lensInfo.split(Regex("\\s{2,}")).filter { it.isNotEmpty() }
+    }
+
+    /**
+     * Draws discrete text parts separated by thin "|" lines, centered horizontally.
+     * Used by z3, z5, z7 for lensInfo_discrete / lensInfo_location rendering.
+     * @param separatorColor color for the "|" line
+     */
+    private fun drawDiscreteText(
+        canvas: Canvas,
+        parts: List<String>,
+        centerX: Float,
+        baselineY: Float,
+        textPaint: Paint,
+        s: Float,
+        separatorColor: Int = Color.parseColor("#D9D9D9"),
+        gap: Float = 20f * s  // gap on each side of the separator
+    ) {
+        if (parts.isEmpty()) return
+        if (parts.size == 1) {
+            textPaint.textAlign = Paint.Align.CENTER
+            canvas.drawText(parts[0], centerX, baselineY, textPaint)
+            return
+        }
+
+        val sepPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = separatorColor
+            strokeWidth = 1f * s
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
+        }
+
+        // Measure total width
+        textPaint.textAlign = Paint.Align.LEFT
+        var totalWidth = 0f
+        for (i in parts.indices) {
+            totalWidth += textPaint.measureText(parts[i])
+            if (i < parts.size - 1) totalWidth += gap * 2f // gap + sep + gap
+        }
+
+        // Draw from left, centered
+        var x = centerX - totalWidth / 2f
+        val sepTop = baselineY + textPaint.ascent() * 0.7f  // top of separator line
+        val sepBottom = baselineY + textPaint.descent() * 0.3f // bottom of separator line
+
+        for (i in parts.indices) {
+            canvas.drawText(parts[i], x, baselineY, textPaint)
+            x += textPaint.measureText(parts[i])
+            if (i < parts.size - 1) {
+                x += gap
+                canvas.drawLine(x, sepTop, x, sepBottom, sepPaint)
+                x += gap
+            }
+        }
+    }
+
+    // ---- Norm ----
+    /**
+     * Norm: Transparent overlay on image bottom. Horizontal container with
+     * device (44sp, white, bold) + nickName (30sp, white 0.8α) + time (30sp, white 0.8α)
+     * XML: type=1, basePortWidth=1530, container height=122, transY=-122, marginL/R=78
+     */
+    private fun applyMeizuNorm(
+        context: Context, source: Bitmap, config: WatermarkConfig
+    ): Bitmap {
+        val imgWidth = source.width
+        val imgHeight = source.height
+        val s = imgWidth / 1530f
+
+        val result = source.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(result)
+
+        val containerH = 122f * s
+        val marginLR = 78f * s
+        val containerTop = imgHeight - containerH
+
+        val deviceText = config.deviceName ?: ""
+        val timeText = config.timeText ?: ""
+
+        val devicePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getMeizuDeviceTypeface(context)
+            textSize = 44f * s
+            color = Color.WHITE
+            textAlign = Paint.Align.LEFT
+            setShadowLayer(4f * s, 1f * s, 1f * s, Color.argb(80, 0, 0, 0))
+        }
+
+        val secondaryPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getMeizuTextRegular(context)
+            textSize = 30f * s
+            color = Color.WHITE
+            alpha = (255 * 0.8f).toInt()
+            textAlign = Paint.Align.LEFT
+            setShadowLayer(4f * s, 1f * s, 1f * s, Color.argb(80, 0, 0, 0))
+        }
+
+        val centerY = containerTop + containerH / 2f
+        var currentX = marginLR
+        val itemGap = 8f * s
+
+        if (deviceText.isNotEmpty()) {
+            val y = centerY - (devicePaint.ascent() + devicePaint.descent()) / 2f
+            canvas.drawText(deviceText, currentX, y, devicePaint)
+            currentX += devicePaint.measureText(deviceText) + itemGap
+        }
+
+        if (timeText.isNotEmpty()) {
+            val y = centerY - (secondaryPaint.ascent() + secondaryPaint.descent()) / 2f
+            canvas.drawText(timeText, currentX, y, secondaryPaint)
+        }
+
+        return result
+    }
+
+    // ---- Pro ----
+    /**
+     * Pro: White bottom bar. Left: device (45sp, black, MEIZUCamera) + red dot.
+     * Right: vertical stack of lensInfo (35sp, black) + time (24sp, #A6A6A6 letterSpacing=0.1).
+     * XML: type=1, basePortWidth=1530, background=#FFFFFF, container height=160, marginL/R=85
+     */
+    private fun applyMeizuPro(
+        context: Context, source: Bitmap, config: WatermarkConfig
+    ): Bitmap {
+        val imgWidth = source.width
+        val imgHeight = source.height
+        val s = imgWidth / 1530f
+
+        val barHeight = (160f * s).toInt()
+        val totalHeight = imgHeight + barHeight
+
+        val result = Bitmap.createBitmap(imgWidth, totalHeight, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
+        canvas.drawBitmap(source, 0f, 0f, null)
+
+        // White bar
+        val whitePaint = Paint().apply { color = Color.WHITE; style = Paint.Style.FILL }
+        canvas.drawRect(0f, imgHeight.toFloat(), imgWidth.toFloat(), totalHeight.toFloat(), whitePaint)
+
+        val barTop = imgHeight.toFloat()
+        val marginL = 85f * s
+        val marginR = 85f * s
+        val barCenterY = barTop + barHeight / 2f
+
+        // Device (left, vertically centered)
+        val deviceText = config.deviceName ?: ""
+        val devicePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getMeizuDeviceTypeface(context)
+            textSize = 45f * s
+            color = Color.BLACK
+            textAlign = Paint.Align.LEFT
+        }
+
+        var deviceEndX = marginL
+        if (deviceText.isNotEmpty()) {
+            val y = barCenterY - (devicePaint.ascent() + devicePaint.descent()) / 2f
+            canvas.drawText(deviceText, marginL, y, devicePaint)
+            deviceEndX = marginL + devicePaint.measureText(deviceText) + 20f * s
+            // Red dot after device name
+            drawMeizuRedDot(canvas, deviceEndX, barCenterY, s)
+        }
+
+        // Right column: lensInfo (top) + time (below)
+        val lensText = config.lensInfo ?: ""
+        val timeText = config.timeText ?: ""
+        val rightX = imgWidth - marginR
+
+        val lensPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getMeizuTextMedium(context)
+            textSize = 35f * s
+            color = Color.BLACK
+            textAlign = Paint.Align.RIGHT
+        }
+
+        val timePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getMeizuTextRegular(context)
+            textSize = 24f * s
+            color = Color.parseColor("#A6A6A6")
+            letterSpacing = 0.1f
+            textAlign = Paint.Align.RIGHT
+        }
+
+        if (lensText.isNotEmpty() && timeText.isNotEmpty()) {
+            val lensH = lensPaint.descent() - lensPaint.ascent()
+            val gapH = 3f * s
+            val timeH = timePaint.descent() - timePaint.ascent()
+            val totalH = lensH + gapH + timeH
+            val groupTop = barTop + (barHeight - totalH) / 2f
+
+            canvas.drawText(lensText, rightX, groupTop - lensPaint.ascent(), lensPaint)
+            canvas.drawText(timeText, rightX, groupTop + lensH + gapH - timePaint.ascent(), timePaint)
+        } else if (lensText.isNotEmpty()) {
+            val y = barCenterY - (lensPaint.ascent() + lensPaint.descent()) / 2f
+            canvas.drawText(lensText, rightX, y, lensPaint)
+        } else if (timeText.isNotEmpty()) {
+            val y = barCenterY - (timePaint.ascent() + timePaint.descent()) / 2f
+            canvas.drawText(timeText, rightX, y, timePaint)
+        }
+
+        return result
+    }
+
+    // ---- Z1 ----
+    /**
+     * Z1: White frame, photo inset. Centered device name + lens info below.
+     * XML: type=2, basePortWidth=1470, image margin L/T/R=30,
+     *      device marginT=40 size=45 black, lensInfo marginT=16 marginB=51 size=32 gray 0.6α
+     * Reference: upper text row (device, black bold) + lower text row (lens, light gray 4 sub-groups)
+     */
+    private fun applyMeizuZ1(
+        context: Context, source: Bitmap, config: WatermarkConfig
+    ): Bitmap {
+        val s = source.width / 1470f
+        val marginSide = 30f * s
+        val marginTop = 30f * s
+
+        val deviceText = config.deviceName ?: ""
+        val lensText = config.lensInfo ?: ""
+
+        val devicePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getMeizuDeviceTypeface(context)
+            textSize = 45f * s
+            color = Color.BLACK
+            textAlign = Paint.Align.CENTER
+        }
+        val lensPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getMeizuTextRegular(context)
+            textSize = 32f * s
+            color = Color.parseColor("#49454F")
+            alpha = (255 * 0.6f).toInt()
+            textAlign = Paint.Align.CENTER
+        }
+
+        val deviceH = if (deviceText.isNotEmpty()) (devicePaint.descent() - devicePaint.ascent()) else 0f
+        val lensH = if (lensText.isNotEmpty()) (lensPaint.descent() - lensPaint.ascent()) else 0f
+        val textAreaH = 40f * s + deviceH +
+            (if (lensText.isNotEmpty()) 16f * s + lensH else 0f) + 51f * s
+
+        val photoW = (source.width - 2 * marginSide).toInt()
+        val photoH = (source.height * photoW / source.width.toFloat()).toInt()
+        val totalW = source.width
+        val totalH = (marginTop + photoH + textAreaH).toInt()
+
+        val result = Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
+        canvas.drawColor(Color.WHITE)
+
+        val photoRect = Rect(marginSide.toInt(), marginTop.toInt(),
+            (marginSide + photoW).toInt(), (marginTop + photoH).toInt())
+        canvas.drawBitmap(source, null, photoRect, Paint(Paint.FILTER_BITMAP_FLAG))
+
+        val centerX = totalW / 2f
+        var currentY = marginTop + photoH + 40f * s
+
+        if (deviceText.isNotEmpty()) {
+            currentY -= devicePaint.ascent()
+            canvas.drawText(deviceText, centerX, currentY, devicePaint)
+            currentY += devicePaint.descent()
+        }
+
+        if (lensText.isNotEmpty()) {
+            currentY += 16f * s
+            currentY -= lensPaint.ascent()
+            canvas.drawText(lensText, centerX, currentY, lensPaint)
+        }
+
+        return result
+    }
+
+    // ---- Z2 ----
+    /**
+     * Z2: Polaroid-style wide white frame. Adaptive icon (left) + lens info (right) at bottom.
+     * XML: type=2, basePortWidth=1130, image margin=200,
+     *      bottom container marginT=247 marginB=245 marginLR=200,
+     *      adaptiveIcon 462×48 left, lensInfo 28sp #3C3C43 0.6α right
+     * Reference: large uniform frame, device text (left) + light gray lens groups (right)
+     */
+    private fun applyMeizuZ2(
+        context: Context, source: Bitmap, config: WatermarkConfig
+    ): Bitmap {
+        val s = source.width / 1130f
+        val margin = 200f * s
+        val marginT = 200f * s
+
+        val lensText = config.lensInfo ?: ""
+        val deviceText = config.deviceName ?: ""
+
+        val lensPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getMeizuTextRegular(context)
+            textSize = 28f * s
+            color = Color.parseColor("#3C3C43")
+            alpha = (255 * 0.6f).toInt()
+            textAlign = Paint.Align.RIGHT
+        }
+
+        // Device as substitute for encrypted adaptive icon (462×48)
+        val logoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getMeizuDeviceTypeface(context)
+            textSize = 38f * s
+            color = Color.BLACK
+            textAlign = Paint.Align.LEFT
+        }
+
+        val iconH = 48f * s
+        val bottomBarH = 247f * s + iconH + 245f * s
+
+        val photoW = (source.width - 2 * margin).toInt()
+        val photoH = (source.height * photoW / source.width.toFloat()).toInt()
+        val totalW = source.width
+        val totalH = (marginT + photoH + bottomBarH).toInt()
+
+        val result = Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
+        canvas.drawColor(Color.WHITE)
+
+        val photoRect = Rect(margin.toInt(), marginT.toInt(),
+            (margin + photoW).toInt(), (marginT + photoH).toInt())
+        canvas.drawBitmap(source, null, photoRect, Paint(Paint.FILTER_BITMAP_FLAG))
+
+        // Bottom: device text (left) + lens info (right), vertically centered in icon row
+        val barCenterY = marginT + photoH + 247f * s + iconH / 2f
+
+        if (deviceText.isNotEmpty()) {
+            val y = barCenterY - (logoPaint.ascent() + logoPaint.descent()) / 2f
+            canvas.drawText(deviceText, margin, y, logoPaint)
+        }
+
+        if (lensText.isNotEmpty()) {
+            val y = barCenterY - (lensPaint.ascent() + lensPaint.descent()) / 2f
+            canvas.drawText(lensText, totalW - margin, y, lensPaint)
+        }
+
+        return result
+    }
+
+    // ---- Z3 ----
+    /**
+     * Z3: White frame, photo inset. Device name (50sp, black, centered) above.
+     * Discrete lens info with "|" separators below (30sp, gray 0.6α).
+     * XML: type=2, basePortWidth=1470, image margin L/T/R=30,
+     *      device marginT=53 size=50, lensInfo_discrete w=859 h=107 marginT=53 marginB=75 size=30
+     * Reference: TEXT ····· TEXT | TEXT | TEXT pattern with 1px gray separators
+     */
+    private fun applyMeizuZ3(
+        context: Context, source: Bitmap, config: WatermarkConfig
+    ): Bitmap {
+        val s = source.width / 1470f
+        val marginSide = 30f * s
+        val marginTop = 30f * s
+
+        val deviceText = config.deviceName ?: ""
+        val lensParts = splitDiscreteParts(config.lensInfo)
+
+        val devicePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getMeizuDeviceTypeface(context)
+            textSize = 50f * s
+            color = Color.BLACK
+            textAlign = Paint.Align.CENTER
+        }
+        val lensPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getMeizuTextRegular(context)
+            textSize = 30f * s
+            color = Color.parseColor("#49454F")
+            alpha = (255 * 0.6f).toInt()
+        }
+
+        val deviceH = if (deviceText.isNotEmpty()) (devicePaint.descent() - devicePaint.ascent()) else 0f
+        val discreteAreaH = 107f * s
+        val textAreaH = 53f * s + deviceH +
+            (if (lensParts.isNotEmpty()) 53f * s + discreteAreaH else 0f) + 75f * s
+
+        val photoW = (source.width - 2 * marginSide).toInt()
+        val photoH = (source.height * photoW / source.width.toFloat()).toInt()
+        val totalW = source.width
+        val totalH = (marginTop + photoH + textAreaH).toInt()
+
+        val result = Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
+        canvas.drawColor(Color.WHITE)
+
+        val photoRect = Rect(marginSide.toInt(), marginTop.toInt(),
+            (marginSide + photoW).toInt(), (marginTop + photoH).toInt())
+        canvas.drawBitmap(source, null, photoRect, Paint(Paint.FILTER_BITMAP_FLAG))
+
+        val centerX = totalW / 2f
+        var currentY = marginTop + photoH + 53f * s
+
+        if (deviceText.isNotEmpty()) {
+            currentY -= devicePaint.ascent()
+            canvas.drawText(deviceText, centerX, currentY, devicePaint)
+            currentY += devicePaint.descent()
+        }
+
+        if (lensParts.isNotEmpty()) {
+            currentY += 53f * s
+            val baselineY = currentY + discreteAreaH / 2f - (lensPaint.ascent() + lensPaint.descent()) / 2f
+            drawDiscreteText(canvas, lensParts, centerX, baselineY, lensPaint, s)
+        }
+
+        return result
+    }
+
+    // ---- Z4 ----
+    /**
+     * Z4: Photo fills left side, white panel on right with rotated text + red dot.
+     * XML: type=2, basePortWidth=1530, background=#FFFFFF, orientation=horizontal,
+     *      lensInfo marginB=100 marginL=40 size=32 rotation=90 gray 0.6α,
+     *      device marginB=143 marginL=15 marginR=40 size=45 black rotation=90
+     * Reference: 50px right panel at 383px scale, text reads bottom-to-top,
+     *            device (black) + lens (black) stacked, red dot at bottom.
+     * Right panel width = marginL(40) + lensTextH(32) + gap(15) + deviceTextH(45) + marginR(40) = 172
+     */
+    private fun applyMeizuZ4(
+        context: Context, source: Bitmap, config: WatermarkConfig
+    ): Bitmap {
+        val s = source.width / 1530f   // NOTE: scale from basePortWidth minus panel would be more accurate
+        // but using full base width for consistent scaling
+
+        // Right panel dimensions
+        val panelMarginL = 40f * s    // gap between photo and first text
+        val lensTextH = 32f * s       // font size → horizontal width when rotated
+        val textGap = 15f * s         // gap between lens and device text columns
+        val deviceTextH = 45f * s
+        val panelMarginR = 40f * s
+        val panelWidth = panelMarginL + lensTextH + textGap + deviceTextH + panelMarginR
+
+        // Photo occupies the remaining width
+        val photoW = (source.width - panelWidth).toInt()
+        val photoH = (source.height * photoW / source.width.toFloat()).toInt()
+        val totalW = source.width
+        val totalH = photoH
+
+        val result = Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
+        canvas.drawColor(Color.WHITE)
+
+        // Photo on left
+        val photoRect = Rect(0, 0, photoW, photoH)
+        canvas.drawBitmap(source, null, photoRect, Paint(Paint.FILTER_BITMAP_FLAG))
+
+        val deviceText = config.deviceName ?: ""
+        val lensText = config.lensInfo ?: ""
+
+        val devicePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getMeizuDeviceTypeface(context)
+            textSize = 45f * s
+            color = Color.BLACK
+            textAlign = Paint.Align.LEFT
+        }
+        val lensPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getMeizuTextRegular(context)
+            textSize = 32f * s
+            color = Color.parseColor("#49454F")
+            alpha = (255 * 0.6f).toInt()
+            textAlign = Paint.Align.LEFT
+        }
+
+        // Device text: rotated 90° CW, reads bottom-to-top
+        // Positioned at rightmost column, marginB=143 from bottom, marginR=40 from right
+        // Device text: rotated 90° CW, reads bottom-to-top
+        // In rightmost column, marginB=143 from bottom, marginR=40 from right
+        if (deviceText.isNotEmpty()) {
+            canvas.save()
+            val colCenterX = totalW - panelMarginR - deviceTextH / 2f
+            val textStartY = totalH - 143f * s
+            canvas.translate(colCenterX, textStartY)
+            canvas.rotate(-90f)
+            val centerOffset = -(devicePaint.ascent() + devicePaint.descent()) / 2f
+            canvas.drawText(deviceText, 0f, centerOffset, devicePaint)
+            canvas.restore()
+        }
+
+        // Lens text: rotated 90° CW, to the LEFT of device column
+        // marginB=100, marginL=40 from image
+        if (lensText.isNotEmpty()) {
+            canvas.save()
+            val colCenterX = totalW - panelMarginR - deviceTextH - textGap - lensTextH / 2f
+            val textStartY = totalH - 100f * s
+            canvas.translate(colCenterX, textStartY)
+            canvas.rotate(-90f)
+            val centerOffset = -(lensPaint.ascent() + lensPaint.descent()) / 2f
+            canvas.drawText(lensText, 0f, centerOffset, lensPaint)
+            canvas.restore()
+        }
+
+        // Red dot near bottom of right panel, centered in device column
+        val dotColX = totalW - panelMarginR - deviceTextH / 2f
+        drawMeizuRedDot(canvas, dotColX, totalH - 40f * s, s)
+
+        return result
+    }
+
+    // ---- Z5 ----
+    /**
+     * Z5: White frame, photo inset. Device name centered + lens+location info below.
+     * XML: type=2, basePortWidth=1220, image marginLR=155 marginT=170,
+     *      device marginT=150 size=45 black, lensInfo_location marginT=16 marginB=183 size=32 gray 0.6α
+     * Reference: 6 light gray text groups below a thin decorative line,
+     *            lens parts + gap + location parts
+     */
+    private fun applyMeizuZ5(
+        context: Context, source: Bitmap, config: WatermarkConfig
+    ): Bitmap {
+        val s = source.width / 1220f
+        val marginSide = 155f * s
+        val marginTop = 170f * s
+
+        val deviceText = config.deviceName ?: ""
+        // Build combined parts: lens info parts + location
+        val lensParts = splitDiscreteParts(config.lensInfo)
+        val locationParts = if (!config.locationText.isNullOrBlank())
+            listOf(config.locationText!!) else emptyList()
+        val allParts = lensParts + locationParts
+
+        val devicePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getMeizuDeviceTypeface(context)
+            textSize = 45f * s
+            color = Color.BLACK
+            textAlign = Paint.Align.CENTER
+        }
+        val infoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getMeizuTextRegular(context)
+            textSize = 32f * s
+            color = Color.parseColor("#49454F")
+            alpha = (255 * 0.6f).toInt()
+        }
+
+        val deviceH = if (deviceText.isNotEmpty()) (devicePaint.descent() - devicePaint.ascent()) else 0f
+        val infoH = if (allParts.isNotEmpty()) (infoPaint.descent() - infoPaint.ascent()) else 0f
+        val textAreaH = 150f * s + deviceH +
+            (if (allParts.isNotEmpty()) 16f * s + infoH else 0f) + 183f * s
+
+        val photoW = (source.width - 2 * marginSide).toInt()
+        val photoH = (source.height * photoW / source.width.toFloat()).toInt()
+        val totalW = source.width
+        val totalH = (marginTop + photoH + textAreaH).toInt()
+
+        val result = Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
+        canvas.drawColor(Color.WHITE)
+
+        val photoRect = Rect(marginSide.toInt(), marginTop.toInt(),
+            (marginSide + photoW).toInt(), (marginTop + photoH).toInt())
+        canvas.drawBitmap(source, null, photoRect, Paint(Paint.FILTER_BITMAP_FLAG))
+
+        val centerX = totalW / 2f
+        var currentY = marginTop + photoH + 150f * s
+
+        if (deviceText.isNotEmpty()) {
+            currentY -= devicePaint.ascent()
+            canvas.drawText(deviceText, centerX, currentY, devicePaint)
+            currentY += devicePaint.descent()
+        }
+
+        if (allParts.isNotEmpty()) {
+            currentY += 16f * s
+            currentY -= infoPaint.ascent()
+            drawDiscreteText(canvas, allParts, centerX, currentY, infoPaint, s)
+        }
+
+        return result
+    }
+
+    // ---- Z6 ----
+    /**
+     * Z6: Thin uniform white frame. Flyme logo (white) + lens info OVERLAID on photo.
+     * XML: type=2, basePortWidth=1530, image margin=38 on all sides,
+     *      icon flyme.png 321×60 center_horizontal transY=-200,
+     *      lensInfo center_horizontal transY=-124 size=32 gray 0.6α
+     * transY is relative offset from natural position (below image).
+     * Negative transY pushes the element upward, overlaying on the photo.
+     * Reference: pure thin white frame, logo/text invisible at thumbnail scale (white on photo).
+     */
+    private fun applyMeizuZ6(
+        context: Context, source: Bitmap, config: WatermarkConfig
+    ): Bitmap {
+        val s = source.width / 1530f
+        val margin = 38f * s
+
+        val lensText = config.lensInfo ?: ""
+
+        val lensPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getMeizuTextRegular(context)
+            textSize = 32f * s
+            color = Color.WHITE   // White text overlaid on photo
+            alpha = (255 * 0.7f).toInt()
+            textAlign = Paint.Align.CENTER
+            setShadowLayer(3f * s, 0f, 1f * s, Color.argb(60, 0, 0, 0))
+        }
+
+        val flymeLogo = loadMeizuLogo(context, "flyme_z6.png")  // white logo for dark overlay
+
+        val photoW = (source.width - 2 * margin).toInt()
+        val photoH = (source.height * photoW / source.width.toFloat()).toInt()
+        val totalW = source.width
+        // Thin uniform frame: margin on all 4 sides
+        val totalH = (margin + photoH + margin).toInt()
+
+        val result = Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
+        canvas.drawColor(Color.WHITE)
+
+        val photoTop = margin
+        val photoRect = Rect(margin.toInt(), photoTop.toInt(),
+            (margin + photoW).toInt(), (photoTop + photoH).toInt())
+        canvas.drawBitmap(source, null, photoRect, Paint(Paint.FILTER_BITMAP_FLAG))
+
+        val centerX = totalW / 2f
+        // Natural Y position of elements = bottom of photo + margin (at the watermark bottom)
+        val naturalY = photoTop + photoH + margin
+
+        // Flyme logo overlaid on photo: transY=-200 from natural position
+        flymeLogo?.let { logo ->
+            val logoW = 321f * s
+            val logoH = 60f * s
+            val logoCenterY = naturalY - 200f * s
+            val logoRect = Rect(
+                (centerX - logoW / 2f).toInt(), (logoCenterY - logoH / 2f).toInt(),
+                (centerX + logoW / 2f).toInt(), (logoCenterY + logoH / 2f).toInt()
+            )
+            canvas.drawBitmap(logo, null, logoRect, Paint(Paint.FILTER_BITMAP_FLAG))
+            logo.recycle()
+        }
+
+        // Lens info overlaid on photo: transY=-124 from natural position
+        if (lensText.isNotEmpty()) {
+            val textY = naturalY - 124f * s
+            canvas.drawText(lensText, centerX, textY, lensPaint)
+        }
+
+        return result
+    }
+
+    // ---- Z7 ----
+    /**
+     * Z7: Flyme logo (black) at top + photo + discrete lens info at bottom.
+     * XML: type=2, basePortWidth=1470, icon flyme.png 321×60 marginT=134,
+     *      image marginLR=30 marginT=106, lensInfo_discrete w=859 h=107 marginT=92 marginB=100 size=30
+     *      textColor=#FF000000 alpha=0.6
+     * Reference: top has 75px border with centered black logo text,
+     *            bottom has 4 text groups separated by 3 "|" separators
+     */
+    private fun applyMeizuZ7(
+        context: Context, source: Bitmap, config: WatermarkConfig
+    ): Bitmap {
+        val s = source.width / 1470f
+        val lensParts = splitDiscreteParts(config.lensInfo)
+
+        val lensPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getMeizuTextRegular(context)
+            textSize = 30f * s
+            color = Color.BLACK
+            alpha = (255 * 0.6f).toInt()
+        }
+
+        val flymeLogo = loadMeizuLogo(context, "flyme_z7.png")  // black logo
+
+        val logoTopMargin = 134f * s
+        val logoH = 60f * s
+        val photoTopMargin = 106f * s
+        val photoMarginSide = 30f * s
+
+        val photoW = (source.width - 2 * photoMarginSide).toInt()
+        val photoH = (source.height * photoW / source.width.toFloat()).toInt()
+
+        val discreteAreaH = 107f * s
+        val lensMarginT = if (lensParts.isNotEmpty()) 92f * s else 0f
+        val lensMarginB = if (lensParts.isNotEmpty()) 100f * s else 30f * s
+
+        val totalW = source.width
+        val totalH = (logoTopMargin + logoH + photoTopMargin + photoH +
+            lensMarginT + discreteAreaH + lensMarginB).toInt()
+
+        val result = Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
+        canvas.drawColor(Color.WHITE)
+
+        val centerX = totalW / 2f
+
+        // Flyme logo at top
+        var currentY = logoTopMargin
+        flymeLogo?.let { logo ->
+            val logoW = 321f * s
+            val logoRect = Rect(
+                (centerX - logoW / 2f).toInt(), currentY.toInt(),
+                (centerX + logoW / 2f).toInt(), (currentY + logoH).toInt()
+            )
+            canvas.drawBitmap(logo, null, logoRect, Paint(Paint.FILTER_BITMAP_FLAG))
+            logo.recycle()
+        }
+        currentY += logoH + photoTopMargin
+
+        // Photo
+        val photoRect = Rect(photoMarginSide.toInt(), currentY.toInt(),
+            (photoMarginSide + photoW).toInt(), (currentY + photoH).toInt())
+        canvas.drawBitmap(source, null, photoRect, Paint(Paint.FILTER_BITMAP_FLAG))
+        currentY += photoH
+
+        // Discrete lens info with separators
+        if (lensParts.isNotEmpty()) {
+            currentY += lensMarginT
+            val baselineY = currentY + discreteAreaH / 2f - (lensPaint.ascent() + lensPaint.descent()) / 2f
+            drawDiscreteText(canvas, lensParts, centerX, baselineY, lensPaint, s,
+                separatorColor = Color.parseColor("#B0B0B0"))
+        }
+
+        return result
+    }
+
+    // ==================== vivo Watermarks ====================
+
+    // Cached vivo typefaces
+    private var vivoRegularTypeface: Typeface? = null
+    private var vivoCameraTypeface: Typeface? = null
+    private var zeissBoldTypeface: Typeface? = null
+    private var iqooBoldTypeface: Typeface? = null
+    private var robotoBoldTypeface: Typeface? = null
+
+    private fun getVivoRegular(context: Context): Typeface {
+        vivoRegularTypeface?.let { return it }
+        return try {
+            Typeface.createFromAsset(context.assets, "watermark/vivo/fonts/vivo-Regular.otf").also {
+                vivoRegularTypeface = it
+            }
+        } catch (_: Exception) { Typeface.create("sans-serif", Typeface.NORMAL) }
+    }
+
+    private fun getVivoCamera(context: Context): Typeface {
+        vivoCameraTypeface?.let { return it }
+        return try {
+            Typeface.createFromAsset(context.assets, "watermark/vivo/fonts/vivoCameraVF.ttf").also {
+                vivoCameraTypeface = it
+            }
+        } catch (_: Exception) { Typeface.create("sans-serif-medium", Typeface.NORMAL) }
+    }
+
+    private fun getZeissBold(context: Context): Typeface {
+        zeissBoldTypeface?.let { return it }
+        return try {
+            Typeface.createFromAsset(context.assets, "watermark/vivo/fonts/ZEISSFrutigerNextW1G-Bold.ttf").also {
+                zeissBoldTypeface = it
+            }
+        } catch (_: Exception) { Typeface.create("sans-serif-medium", Typeface.BOLD) }
+    }
+
+    private fun getIqooBold(context: Context): Typeface {
+        iqooBoldTypeface?.let { return it }
+        return try {
+            Typeface.createFromAsset(context.assets, "watermark/vivo/fonts/IQOOTYPE-Bold.ttf").also {
+                iqooBoldTypeface = it
+            }
+        } catch (_: Exception) { Typeface.create("sans-serif", Typeface.BOLD) }
+    }
+
+    private fun getRobotoBold(context: Context): Typeface {
+        robotoBoldTypeface?.let { return it }
+        return try {
+            Typeface.createFromAsset(context.assets, "watermark/vivo/fonts/Roboto-Bold.ttf").also {
+                robotoBoldTypeface = it
+            }
+        } catch (_: Exception) { Typeface.create("sans-serif", Typeface.BOLD) }
+    }
+
+    private fun loadVivoLogo(context: Context, name: String): Bitmap? {
+        return try {
+            context.assets.open("watermark/vivo/logos/$name").use { stream ->
+                BitmapFactory.decodeStream(stream)
+            }
+        } catch (_: Exception) { null }
+    }
+
+    // vivo reference base width (typical vivo photo output)
+    private const val VIVO_BASE = 4000f
+
+    // ---- ZEISS ----
+    /**
+     * ZEISS branded watermark: white bottom bar with "ZEISS" branding on left,
+     * device name + lens info stacked on right. Separator line between sides.
+     * Based on vivo X-series ZEISS partnership watermark style.
+     */
+    private fun applyVivoZeiss(
+        context: Context, source: Bitmap, config: WatermarkConfig
+    ): Bitmap {
+        val imgW = source.width
+        val imgH = source.height
+        val s = imgW / VIVO_BASE
+
+        val barH = (160f * s).toInt()
+        val totalH = imgH + barH
+
+        val result = Bitmap.createBitmap(imgW, totalH, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
+        canvas.drawBitmap(source, 0f, 0f, null)
+
+        // White bar
+        val barPaint = Paint().apply { color = Color.WHITE; style = Paint.Style.FILL }
+        canvas.drawRect(0f, imgH.toFloat(), imgW.toFloat(), totalH.toFloat(), barPaint)
+
+        val barTop = imgH.toFloat()
+        val barCenterY = barTop + barH / 2f
+        val marginLR = 80f * s
+
+        // Left: "ZEISS" text in ZEISS brand font
+        val zeissColor = Color.parseColor("#003B7A")  // ZEISS brand blue
+        val zeissPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getZeissBold(context)
+            textSize = 52f * s
+            color = zeissColor
+            textAlign = Paint.Align.LEFT
+            letterSpacing = 0.08f
+        }
+        val zeissText = "ZEISS"
+        val zeissY = barCenterY - (zeissPaint.ascent() + zeissPaint.descent()) / 2f
+        canvas.drawText(zeissText, marginLR, zeissY, zeissPaint)
+
+        // Thin vertical separator
+        val zeissEndX = marginLR + zeissPaint.measureText(zeissText) + 30f * s
+        val sepPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#CCCCCC")
+            strokeWidth = 1.5f * s
+        }
+        canvas.drawLine(zeissEndX, barTop + 35f * s, zeissEndX, totalH - 35f * s, sepPaint)
+
+        // Right: device name (bold) + lens info (regular)
+        val rightX = imgW - marginLR
+        val deviceText = config.deviceName ?: ""
+        val lensText = config.lensInfo ?: ""
+
+        val devicePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getRobotoBold(context)
+            textSize = 36f * s
+            color = Color.BLACK
+            textAlign = Paint.Align.RIGHT
+        }
+        val lensPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getVivoRegular(context)
+            textSize = 26f * s
+            color = Color.parseColor("#888888")
+            textAlign = Paint.Align.RIGHT
+        }
+
+        if (deviceText.isNotEmpty() && lensText.isNotEmpty()) {
+            val deviceH = devicePaint.descent() - devicePaint.ascent()
+            val gap = 4f * s
+            val lensH = lensPaint.descent() - lensPaint.ascent()
+            val totalTextH = deviceH + gap + lensH
+            val groupTop = barTop + (barH - totalTextH) / 2f
+            canvas.drawText(deviceText, rightX, groupTop - devicePaint.ascent(), devicePaint)
+            canvas.drawText(lensText, rightX, groupTop + deviceH + gap - lensPaint.ascent(), lensPaint)
+        } else if (deviceText.isNotEmpty()) {
+            canvas.drawText(deviceText, rightX, zeissY, devicePaint)
+        } else if (lensText.isNotEmpty()) {
+            val y = barCenterY - (lensPaint.ascent() + lensPaint.descent()) / 2f
+            canvas.drawText(lensText, rightX, y, lensPaint)
+        }
+
+        return result
+    }
+
+    // ---- vivo Classic ----
+    /**
+     * Classic overlay watermark: vivo logo (white) on bottom-left corner of photo,
+     * time/date text on bottom-right. No frame added — elements overlay directly on image.
+     */
+    private fun applyVivoClassic(
+        context: Context, source: Bitmap, config: WatermarkConfig
+    ): Bitmap {
+        val imgW = source.width
+        val imgH = source.height
+        val s = imgW / VIVO_BASE
+
+        val result = source.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(result)
+
+        val marginLR = 80f * s
+        val marginB = 60f * s
+
+        // vivo logo (white) on bottom-left
+        val logo = loadVivoLogo(context, "vivo_logo_wm_xml.png")
+        logo?.let {
+            val logoH = 50f * s
+            val logoW = logoH * it.width / it.height
+            val logoRect = Rect(
+                marginLR.toInt(),
+                (imgH - marginB - logoH).toInt(),
+                (marginLR + logoW).toInt(),
+                (imgH - marginB).toInt()
+            )
+            val logoPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+                setShadowLayer(6f * s, 0f, 2f * s, Color.argb(90, 0, 0, 0))
+            }
+            canvas.drawBitmap(it, null, logoRect, logoPaint)
+            it.recycle()
+        }
+
+        // Bottom-right: time text (white, with shadow)
+        val timeText = config.timeText ?: ""
+        if (timeText.isNotEmpty()) {
+            val timePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                typeface = getVivoRegular(context)
+                textSize = 32f * s
+                color = Color.WHITE
+                textAlign = Paint.Align.RIGHT
+                setShadowLayer(4f * s, 1f * s, 1f * s, Color.argb(100, 0, 0, 0))
+            }
+            canvas.drawText(timeText, imgW - marginLR,
+                imgH - marginB - 10f * s, timePaint)
+        }
+
+        // Device name below logo (smaller)
+        val deviceText = config.deviceName ?: ""
+        if (deviceText.isNotEmpty()) {
+            val devPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                typeface = getVivoCamera(context)
+                textSize = 24f * s
+                color = Color.WHITE
+                alpha = (255 * 0.85f).toInt()
+                textAlign = Paint.Align.LEFT
+                setShadowLayer(4f * s, 1f * s, 1f * s, Color.argb(100, 0, 0, 0))
+            }
+            canvas.drawText(deviceText, marginLR,
+                imgH - marginB + 30f * s, devPaint)
+        }
+
+        return result
+    }
+
+    // ---- vivo Pro ----
+    /**
+     * Pro watermark: white bottom bar with vivo logo on left, device name + lens info
+     * stacked on right, time in gray below lens info.
+     */
+    private fun applyVivoPro(
+        context: Context, source: Bitmap, config: WatermarkConfig
+    ): Bitmap {
+        val imgW = source.width
+        val imgH = source.height
+        val s = imgW / VIVO_BASE
+
+        val barH = (180f * s).toInt()
+        val totalH = imgH + barH
+
+        val result = Bitmap.createBitmap(imgW, totalH, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
+        canvas.drawBitmap(source, 0f, 0f, null)
+
+        // White bar
+        val barPaint = Paint().apply { color = Color.WHITE; style = Paint.Style.FILL }
+        canvas.drawRect(0f, imgH.toFloat(), imgW.toFloat(), totalH.toFloat(), barPaint)
+
+        val barTop = imgH.toFloat()
+        val barCenterY = barTop + barH / 2f
+        val marginLR = 80f * s
+
+        // Left: vivo logo (tinted to black for white bar)
+        val logo = loadVivoLogo(context, "vivo_logo_wm_xml.png")
+        logo?.let {
+            val logoH = 52f * s
+            val logoW = logoH * it.width / it.height
+            val tintPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+                colorFilter = android.graphics.PorterDuffColorFilter(
+                    Color.BLACK, android.graphics.PorterDuff.Mode.SRC_IN
+                )
+            }
+            val logoY = barCenterY - logoH / 2f
+            val logoRect = Rect(
+                marginLR.toInt(), logoY.toInt(),
+                (marginLR + logoW).toInt(), (logoY + logoH).toInt()
+            )
+            canvas.drawBitmap(it, null, logoRect, tintPaint)
+            it.recycle()
+        }
+
+        // Thin vertical separator
+        val sepX = marginLR + 180f * s
+        val sepPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#DDDDDD")
+            strokeWidth = 1.5f * s
+        }
+        canvas.drawLine(sepX, barTop + 40f * s, sepX, totalH - 40f * s, sepPaint)
+
+        // Right side: device name (top) + lens info (below) + time (smallest)
+        val rightX = imgW - marginLR
+        val deviceText = config.deviceName ?: ""
+        val lensText = config.lensInfo ?: ""
+        val timeText = config.timeText ?: ""
+
+        val devicePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getVivoCamera(context)
+            textSize = 34f * s
+            color = Color.BLACK
+            textAlign = Paint.Align.RIGHT
+        }
+        val lensPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getVivoRegular(context)
+            textSize = 24f * s
+            color = Color.parseColor("#666666")
+            textAlign = Paint.Align.RIGHT
+        }
+        val timePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getVivoRegular(context)
+            textSize = 22f * s
+            color = Color.parseColor("#AAAAAA")
+            textAlign = Paint.Align.RIGHT
+        }
+
+        // Stack available text lines
+        val lines = mutableListOf<Pair<String, Paint>>()
+        if (deviceText.isNotEmpty()) lines.add(deviceText to devicePaint)
+        if (lensText.isNotEmpty()) lines.add(lensText to lensPaint)
+        if (timeText.isNotEmpty()) lines.add(timeText to timePaint)
+
+        if (lines.isNotEmpty()) {
+            val gap = 4f * s
+            var totalTextH = 0f
+            for ((_, p) in lines) totalTextH += p.descent() - p.ascent()
+            totalTextH += gap * (lines.size - 1)
+            var y = barTop + (barH - totalTextH) / 2f
+            for ((text, paint) in lines) {
+                y -= paint.ascent()
+                canvas.drawText(text, rightX, y, paint)
+                y += paint.descent() + gap
+            }
+        }
+
+        return result
+    }
+
+    // ---- iQOO ----
+    /**
+     * iQOO gaming brand watermark: white bottom bar with iQOO logo (black) on left,
+     * device name + lens info on right in bold style.
+     */
+    private fun applyVivoIqoo(
+        context: Context, source: Bitmap, config: WatermarkConfig
+    ): Bitmap {
+        val imgW = source.width
+        val imgH = source.height
+        val s = imgW / VIVO_BASE
+
+        val barH = (160f * s).toInt()
+        val totalH = imgH + barH
+
+        val result = Bitmap.createBitmap(imgW, totalH, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
+        canvas.drawBitmap(source, 0f, 0f, null)
+
+        // White bar
+        val barPaint = Paint().apply { color = Color.WHITE; style = Paint.Style.FILL }
+        canvas.drawRect(0f, imgH.toFloat(), imgW.toFloat(), totalH.toFloat(), barPaint)
+
+        val barTop = imgH.toFloat()
+        val barCenterY = barTop + barH / 2f
+        val marginLR = 80f * s
+
+        // Left: iQOO logo (black on transparent)
+        val logo = loadVivoLogo(context, "iqoo_logo_wm_xml.png")
+        logo?.let {
+            val logoH = 52f * s
+            val logoW = logoH * it.width / it.height
+            val logoY = barCenterY - logoH / 2f
+            val logoRect = Rect(
+                marginLR.toInt(), logoY.toInt(),
+                (marginLR + logoW).toInt(), (logoY + logoH).toInt()
+            )
+            canvas.drawBitmap(it, null, logoRect, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+            it.recycle()
+        }
+
+        // Thin vertical separator
+        val sepX = marginLR + 200f * s
+        val sepPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#CCCCCC")
+            strokeWidth = 1.5f * s
+        }
+        canvas.drawLine(sepX, barTop + 35f * s, sepX, totalH - 35f * s, sepPaint)
+
+        // Right: device name (bold) + lens info
+        val rightX = imgW - marginLR
+        val deviceText = config.deviceName ?: ""
+        val lensText = config.lensInfo ?: ""
+
+        val devicePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getIqooBold(context)
+            textSize = 38f * s
+            color = Color.BLACK
+            textAlign = Paint.Align.RIGHT
+        }
+        val lensPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = getVivoRegular(context)
+            textSize = 26f * s
+            color = Color.parseColor("#888888")
+            textAlign = Paint.Align.RIGHT
+        }
+
+        if (deviceText.isNotEmpty() && lensText.isNotEmpty()) {
+            val deviceH = devicePaint.descent() - devicePaint.ascent()
+            val gap = 4f * s
+            val lensH = lensPaint.descent() - lensPaint.ascent()
+            val totalTextH = deviceH + gap + lensH
+            val groupTop = barTop + (barH - totalTextH) / 2f
+            canvas.drawText(deviceText, rightX, groupTop - devicePaint.ascent(), devicePaint)
+            canvas.drawText(lensText, rightX, groupTop + deviceH + gap - lensPaint.ascent(), lensPaint)
+        } else if (deviceText.isNotEmpty()) {
+            val y = barCenterY - (devicePaint.ascent() + devicePaint.descent()) / 2f
+            canvas.drawText(deviceText, rightX, y, devicePaint)
+        } else if (lensText.isNotEmpty()) {
+            val y = barCenterY - (lensPaint.ascent() + lensPaint.descent()) / 2f
+            canvas.drawText(lensText, rightX, y, lensPaint)
         }
 
         return result
