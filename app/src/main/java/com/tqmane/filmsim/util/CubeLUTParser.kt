@@ -99,15 +99,30 @@ object CubeLUTParser {
             var dataOffset = 0
             var isBgr: Boolean
             
-            // Check for .MS-LUT header
-            val magic = String(bytes.copyOfRange(0, 8.coerceAtMost(bytes.size)))
-            val hasMsLutHeader = magic == ".MS-LUT "
+            // Check for known headers
+            val magic8 = String(bytes.copyOfRange(0, 8.coerceAtMost(bytes.size)))
+            val magic4 = String(bytes.copyOfRange(0, 4.coerceAtMost(bytes.size)))
+            val hasMsLutHeader = magic8 == ".MS-LUT "
+            val hasLut3Header = magic4 == "LUT3"
             
             // BGR detection will be determined by analyzing actual data pattern
             // after parsing header and getting data offset
             // (moved to after header parsing)
             
-            if (hasMsLutHeader) {
+            if (hasLut3Header && bytes.size >= 12) {
+                // LUT3 header (Huawei format):
+                // 0x00-0x03: "LUT3" magic
+                // 0x04-0x07: LUT size (little endian uint32)
+                // 0x08-0x0B: entry count (little endian uint32)  = lutSize³
+                // 0x0C..   : RGB data, 3 bytes per entry
+                lutSize = (bytes[0x04].toInt() and 0xFF) or
+                        ((bytes[0x05].toInt() and 0xFF) shl 8) or
+                        ((bytes[0x06].toInt() and 0xFF) shl 16) or
+                        ((bytes[0x07].toInt() and 0xFF) shl 24)
+                dataOffset = 12
+                channels = 3
+                android.util.Log.d("CubeLUTParser", "LUT3 header: lutSize=$lutSize")
+            } else if (hasMsLutHeader) {
                 // Parse MS-LUT header
                 // Header structure:
                 // 0x00-0x07: ".MS-LUT " magic
