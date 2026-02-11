@@ -752,7 +752,14 @@ class MainActivity : ComponentActivity() {
         val honorChipIds = listOf(R.id.chipWatermarkFrame, R.id.chipWatermarkText, R.id.chipWatermarkFrameYG, R.id.chipWatermarkTextYG)
         val meizuChipIds = listOf(R.id.chipMeizuNorm, R.id.chipMeizuPro, R.id.chipMeizuZ1, R.id.chipMeizuZ2,
             R.id.chipMeizuZ3, R.id.chipMeizuZ4, R.id.chipMeizuZ5, R.id.chipMeizuZ6, R.id.chipMeizuZ7)
-        val vivoChipIds = listOf(R.id.chipVivoZeiss, R.id.chipVivoClassic, R.id.chipVivoPro, R.id.chipVivoIqoo)
+        val vivoChipIds = listOf(R.id.chipVivoZeiss, R.id.chipVivoClassic, R.id.chipVivoPro, R.id.chipVivoIqoo,
+            R.id.chipVivoZeissV1, R.id.chipVivoZeissSonnar, R.id.chipVivoZeissHumanity,
+            R.id.chipVivoIqooV1, R.id.chipVivoIqooHumanity,
+            R.id.chipVivoZeissFrame, R.id.chipVivoZeissOverlay, R.id.chipVivoZeissCenter,
+            R.id.chipVivoFrame, R.id.chipVivoFrameTime,
+            R.id.chipVivoIqooFrame, R.id.chipVivoIqooFrameTime,
+            R.id.chipVivoOS, R.id.chipVivoOSCorner, R.id.chipVivoOSSimple,
+            R.id.chipVivoEvent)
         val allStyleChipIds = honorChipIds + meizuChipIds + vivoChipIds
 
         val watermarkStyleRow = findViewById<LinearLayout>(R.id.watermarkStyleRow)
@@ -825,18 +832,50 @@ class MainActivity : ComponentActivity() {
                     R.id.chipVivoClassic -> WatermarkProcessor.WatermarkStyle.VIVO_CLASSIC
                     R.id.chipVivoPro -> WatermarkProcessor.WatermarkStyle.VIVO_PRO
                     R.id.chipVivoIqoo -> WatermarkProcessor.WatermarkStyle.VIVO_IQOO
+                    R.id.chipVivoZeissV1 -> WatermarkProcessor.WatermarkStyle.VIVO_ZEISS_V1
+                    R.id.chipVivoZeissSonnar -> WatermarkProcessor.WatermarkStyle.VIVO_ZEISS_SONNAR
+                    R.id.chipVivoZeissHumanity -> WatermarkProcessor.WatermarkStyle.VIVO_ZEISS_HUMANITY
+                    R.id.chipVivoIqooV1 -> WatermarkProcessor.WatermarkStyle.VIVO_IQOO_V1
+                    R.id.chipVivoIqooHumanity -> WatermarkProcessor.WatermarkStyle.VIVO_IQOO_HUMANITY
+                    R.id.chipVivoZeissFrame -> WatermarkProcessor.WatermarkStyle.VIVO_ZEISS_FRAME
+                    R.id.chipVivoZeissOverlay -> WatermarkProcessor.WatermarkStyle.VIVO_ZEISS_OVERLAY
+                    R.id.chipVivoZeissCenter -> WatermarkProcessor.WatermarkStyle.VIVO_ZEISS_CENTER
+                    R.id.chipVivoFrame -> WatermarkProcessor.WatermarkStyle.VIVO_FRAME
+                    R.id.chipVivoFrameTime -> WatermarkProcessor.WatermarkStyle.VIVO_FRAME_TIME
+                    R.id.chipVivoIqooFrame -> WatermarkProcessor.WatermarkStyle.VIVO_IQOO_FRAME
+                    R.id.chipVivoIqooFrameTime -> WatermarkProcessor.WatermarkStyle.VIVO_IQOO_FRAME_TIME
+                    R.id.chipVivoOS -> WatermarkProcessor.WatermarkStyle.VIVO_OS
+                    R.id.chipVivoOSCorner -> WatermarkProcessor.WatermarkStyle.VIVO_OS_CORNER
+                    R.id.chipVivoOSSimple -> WatermarkProcessor.WatermarkStyle.VIVO_OS_SIMPLE
+                    R.id.chipVivoEvent -> WatermarkProcessor.WatermarkStyle.VIVO_EVENT
                     else -> WatermarkProcessor.WatermarkStyle.NONE
                 }
                 val isYG = currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.FRAME_YG ||
                            currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.TEXT_YG
                 val showInputs = currentWatermarkStyle != WatermarkProcessor.WatermarkStyle.NONE
                 val noDevice = currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.MEIZU_Z6 ||
-                               currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.MEIZU_Z7
+                               currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.MEIZU_Z7 ||
+                               currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.VIVO_OS_CORNER ||
+                               currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.VIVO_OS_SIMPLE
                 val isVivoClassic = currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.VIVO_CLASSIC
+                val noLens = isYG || isVivoClassic ||
+                             currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.VIVO_ZEISS_HUMANITY ||
+                             currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.VIVO_IQOO_HUMANITY ||
+                             currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.VIVO_FRAME ||
+                             currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.VIVO_IQOO_FRAME ||
+                             currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.VIVO_OS_CORNER ||
+                             currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.VIVO_OS_SIMPLE
+                val noTime = isYG ||
+                             currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.VIVO_ZEISS_HUMANITY ||
+                             currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.VIVO_IQOO_HUMANITY ||
+                             currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.VIVO_FRAME ||
+                             currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.VIVO_IQOO_FRAME ||
+                             currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.VIVO_OS_CORNER ||
+                             currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.VIVO_OS_SIMPLE
                 watermarkDeviceContainer.visibility = if (showInputs && !noDevice) View.VISIBLE else View.GONE
-                watermarkLensContainer.visibility = if (showInputs && !isYG && !isVivoClassic) View.VISIBLE else View.GONE
-                watermarkTimeContainer.visibility = if (showInputs && !isYG) View.VISIBLE else View.GONE
-                watermarkLocationContainer.visibility = if (showInputs && !isYG) View.VISIBLE else View.GONE
+                watermarkLensContainer.visibility = if (showInputs && !noLens) View.VISIBLE else View.GONE
+                watermarkTimeContainer.visibility = if (showInputs && !noTime) View.VISIBLE else View.GONE
+                watermarkLocationContainer.visibility = if (showInputs && !noTime) View.VISIBLE else View.GONE
                 updateWatermarkPreview()
             }
         }
