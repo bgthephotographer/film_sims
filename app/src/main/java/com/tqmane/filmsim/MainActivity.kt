@@ -117,6 +117,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var watermarkLensInput: EditText
     private lateinit var watermarkPreview: ImageView
     private var previewBitmapCopy: Bitmap? = null
+    private var watermarkPreviewJob: kotlinx.coroutines.Job? = null
     
     // Pinch-to-zoom
     private lateinit var scaleGestureDetector: ScaleGestureDetector
@@ -615,6 +616,10 @@ class MainActivity : ComponentActivity() {
                     renderer.setIntensity(intensity)
                     glSurfaceView.requestRender()
                 }
+                // Re-render watermark preview so filter intensity matches
+                if (currentWatermarkStyle != WatermarkProcessor.WatermarkStyle.NONE) {
+                    updateWatermarkPreview()
+                }
             }
             
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
@@ -890,16 +895,20 @@ class MainActivity : ComponentActivity() {
     private fun updateWatermarkPreview() {
         if (currentWatermarkStyle == WatermarkProcessor.WatermarkStyle.NONE) {
             watermarkPreview.visibility = View.GONE
+            watermarkPreviewJob?.cancel()
             return
         }
 
         val preview = previewBitmapCopy ?: return
         val lut = currentLut
+        val intensity = currentIntensity
 
-        activityScope.launch(Dispatchers.Default) {
-            // Apply current LUT to preview so filter is visible under watermark
-            val base = if (lut != null) {
-                LutBitmapProcessor.applyLutToBitmap(preview, lut)
+        // Cancel any in-flight render to debounce rapid slider changes
+        watermarkPreviewJob?.cancel()
+        watermarkPreviewJob = activityScope.launch(Dispatchers.Default) {
+            // Apply current LUT at the current intensity so preview matches the GL view
+            val base = if (lut != null && intensity > 0f) {
+                LutBitmapProcessor.applyLutToBitmap(preview, lut, intensity)
             } else {
                 preview
             }

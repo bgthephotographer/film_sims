@@ -1966,7 +1966,8 @@ object WatermarkProcessor {
         }
 
         val deviceText = config.deviceName ?: ""
-        val modelPaint = createWeightedPaint(getVivoCamera(context), 700).apply {
+        // typeface 3 = vivo-Regular
+        val modelPaint = createWeightedPaint(getVivoRegular(context), 700).apply {
             textSize = 13f * dp
             color = Color.BLACK
             textAlign = Paint.Align.LEFT
@@ -1982,8 +1983,8 @@ object WatermarkProcessor {
         val timeText = config.timeText ?: ""
         val locText = config.locationText ?: ""
 
-        // 3A text (typeface 5 = ZEISSFrutigerNextW1G, size 9, weight 400, #666666)
-        val infoPaint = createWeightedPaint(getZeissBold(context), 400).apply {
+        // 3A text (typeface 5 = Roboto-Bold, size 9, weight 400, #666666)
+        val infoPaint = createWeightedPaint(getRobotoBold(context), 400).apply {
             textSize = 9f * dp
             color = VIVO_3A_STD
             textAlign = Paint.Align.RIGHT
@@ -2290,7 +2291,8 @@ object WatermarkProcessor {
         }
 
         val deviceText = config.deviceName ?: ""
-        val modelPaint = createWeightedPaint(getVivoCamera(context), 600).apply {
+        // typeface 3 = vivo-Regular (common1.txt uses typeface3, but zeiss1 variant uses typeface8→vivoCamera)
+        val modelPaint = createWeightedPaint(getVivoRegular(context), 600).apply {
             textSize = 14f * dp; color = Color.BLACK; textAlign = Paint.Align.LEFT
         }
         if (deviceText.isNotEmpty()) {
@@ -2319,11 +2321,13 @@ object WatermarkProcessor {
         val timeText = config.timeText ?: ""
         val locText = config.locationText ?: ""
 
-        val infoPaint = createWeightedPaint(getZeissBold(context), 500).apply {
+        // typeface 5 = Roboto-Bold
+        val infoPaint = createWeightedPaint(getRobotoBold(context), 500).apply {
             textSize = 9f * dp; color = VIVO_3A_STD; textAlign = Paint.Align.RIGHT
         }
-        val timePaint = createWeightedPaint(getZeissBold(context), 400).apply {
-            textSize = 6f * dp; color = VIVO_TIME_GRAY; textAlign = Paint.Align.RIGHT
+        // typeface 0 = Roboto-Bold, size 7dp, weight 450
+        val timePaint = createWeightedPaint(getRobotoBold(context), 450).apply {
+            textSize = 7f * dp; color = VIVO_TIME_GRAY; textAlign = Paint.Align.RIGHT
         }
 
         val hasInfo = lensText.isNotEmpty()
@@ -2403,8 +2407,8 @@ object WatermarkProcessor {
         // Model | ZEISS text (starting after ZEISS logo at x=50dp per template)
         val textStartX = 50f * dp
         val deviceText = config.deviceName ?: ""
-        // typeface=4 (vivo-Regular), size=14dp, weight=700
-        val modelPaint = createWeightedPaint(getVivoRegular(context), 700).apply {
+        // typeface=4 (ZEISSFrutigerNextW1G-Bold), size=14dp, weight=700
+        val modelPaint = createWeightedPaint(getZeissBold(context), 700).apply {
             textSize = 14f * dp; color = Color.BLACK; textAlign = Paint.Align.LEFT
         }
         val lensText = config.lensInfo ?: ""
@@ -2420,15 +2424,15 @@ object WatermarkProcessor {
             canvas.drawRect(divX, modelRowY - 4.5f * dp, divX + divW, modelRowY + 4.5f * dp,
                 Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; style = Paint.Style.FILL })
             val zeissText = "ZEISS"
-            val zeissPaint = createWeightedPaint(getVivoRegular(context), 700).apply {
+            val zeissPaint = createWeightedPaint(getZeissBold(context), 700).apply {
                 textSize = 14f * dp; color = Color.BLACK; textAlign = Paint.Align.LEFT
             }
             canvas.drawText(zeissText, divX + divW + 5f * dp,
                 modelRowY - (zeissPaint.ascent() + zeissPaint.descent()) / 2f, zeissPaint)
         }
 
-        // Bottom sub-row: 3A params (typeface=1, 8dp, w550, #757575)
-        val threaPaint = createWeightedPaint(getVivoSansExp(context), 550).apply {
+        // Bottom sub-row: 3A params (typeface=1 = vivoCameraVF, 8dp, w550, #757575)
+        val threaPaint = createWeightedPaint(getVivoCamera(context), 550).apply {
             textSize = 8f * dp; color = VIVO_TIME_GRAY; textAlign = Paint.Align.LEFT
         }
         if (lensText.isNotEmpty()) {
@@ -2685,12 +2689,12 @@ object WatermarkProcessor {
         // ZEISS T* logo area: centered at about (225.5, 494.5) in dp → template pixel (676, 1483)
         // We'll draw model|ZEISS centered + 3A below
 
-        // model | ZEISS (typeface4 = vivo-Regular, 14dp → 42px template, centered)
-        val modelPaint = createWeightedPaint(getVivoRegular(context), 700).apply {
+        // model | ZEISS (typeface4 = ZEISSFrutigerNextW1G-Bold, 14dp → 42px template, centered)
+        val modelPaint = createWeightedPaint(getZeissBold(context), 700).apply {
             textSize = 14f * dp * 3; color = Color.BLACK; textAlign = Paint.Align.CENTER
         }
-        // 3A (typeface1 = vivoSansExpVF, 8dp → 24px)
-        val threePaint = createWeightedPaint(getVivoSansExp(context), 550).apply {
+        // 3A (typeface1 = vivoCameraVF, 8dp → 24px)
+        val threePaint = createWeightedPaint(getVivoCamera(context), 550).apply {
             textSize = 8f * dp * 3; color = VIVO_TIME_GRAY; textAlign = Paint.Align.CENTER
         }
 
@@ -2754,16 +2758,17 @@ object WatermarkProcessor {
             }
         } catch (_: Exception) {}
 
-        // Text params: white, typeface4/1, 12dp model, 11dp date/3A
-        val modelPaint = createWeightedPaint(getVivoRegular(context), 700).apply {
+        // Text params: white, typeface4 = ZEISSFrutigerNextW1G-Bold for model,
+        // typeface1 = vivoCameraVF for params
+        val modelPaint = createWeightedPaint(getZeissBold(context), 700).apply {
             textSize = 12f * dp; color = Color.WHITE; textAlign = Paint.Align.LEFT
             setShadowLayer(shadowR, shadowOff, shadowOff, Color.argb(80, 0, 0, 0))
         }
-        val datePaint = createWeightedPaint(getVivoSansExp(context), 600).apply {
+        val datePaint = createWeightedPaint(getVivoCamera(context), 600).apply {
             textSize = 11f * dp; color = Color.WHITE; textAlign = Paint.Align.RIGHT; letterSpacing = 0.04f
             setShadowLayer(shadowR, shadowOff, shadowOff, Color.argb(80, 0, 0, 0))
         }
-        val paramPaint = createWeightedPaint(getVivoSansExp(context), 600).apply {
+        val paramPaint = createWeightedPaint(getVivoCamera(context), 600).apply {
             textSize = 11f * dp; color = Color.WHITE; letterSpacing = 0.04f
             setShadowLayer(shadowR, shadowOff, shadowOff, Color.argb(80, 0, 0, 0))
         }
@@ -2835,10 +2840,12 @@ object WatermarkProcessor {
         // Text area center: between photo bottom (996px) and template bottom (1476px) → ~1236
         val textCY = 1236f * realScale
 
-        val modelPaint = createWeightedPaint(getVivoRegular(context), 700).apply {
+        // typeface4 = ZEISSFrutigerNextW1G-Bold
+        val modelPaint = createWeightedPaint(getZeissBold(context), 700).apply {
             textSize = 14f * 3f * realScale; color = Color.BLACK; textAlign = Paint.Align.CENTER
         }
-        val threePaint = createWeightedPaint(getVivoSansExp(context), 550).apply {
+        // typeface1 = vivoCameraVF
+        val threePaint = createWeightedPaint(getVivoCamera(context), 550).apply {
             textSize = 8f * 3f * realScale; color = VIVO_TIME_GRAY; textAlign = Paint.Align.CENTER
         }
 
